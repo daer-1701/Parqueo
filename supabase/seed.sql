@@ -1,0 +1,8 @@
+-- Usuarios iniciales: usa el script de Node en lugar de SQL manual
+--
+--   1. Agrega SUPABASE_SERVICE_ROLE_KEY en .env.local
+--   2. npm run setup:users
+--
+-- Crea automáticamente:
+--   admin@parqueo.com  / Admin1234!   (rol: admin)
+--   worker@parqueo.com / Worker1234!  (rol: worker)
