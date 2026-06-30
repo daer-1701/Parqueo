@@ -16,7 +16,7 @@ import {
 } from '@/lib/datetime';
 import { formatCurrency } from '@/lib/pricing';
 import type { ParkingEntry, ReportPeriodData, ReportSummary } from '@/types/database';
-import { PAYMENT_LABELS, VEHICLE_LABELS } from '@/types/database';
+import { VEHICLE_LABELS } from '@/types/database';
 import { addDays, endOfDay, parseISO, startOfDay } from 'date-fns';
 import { fromZonedTime, toZonedTime } from 'date-fns-tz';
 import { CalendarRange } from 'lucide-react';
@@ -154,17 +154,6 @@ export function AdminDashboard({ entries }: AdminDashboardProps) {
     [filtered, activeRange, filter, rangeInvalid]
   );
 
-  const paymentBreakdown = useMemo(() => {
-    const breakdown: Record<string, number> = {};
-    filtered.forEach((e) => {
-      if (e.payment_method) {
-        breakdown[e.payment_method] =
-          (breakdown[e.payment_method] ?? 0) + (e.amount ?? 0);
-      }
-    });
-    return breakdown;
-  }, [filtered]);
-
   const vehicleBreakdown = useMemo(() => {
     const breakdown: Record<string, number> = {};
     filtered.forEach((e) => {
@@ -291,42 +280,22 @@ export function AdminDashboard({ entries }: AdminDashboardProps) {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-        <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6">
-          <h3 className="font-semibold text-slate-900 mb-4">Por método de pago</h3>
-          {Object.keys(paymentBreakdown).length === 0 ? (
-            <p className="text-slate-400 text-sm">Sin datos</p>
-          ) : (
-            <div className="space-y-3">
-              {Object.entries(paymentBreakdown).map(([method, amount]) => (
-                <div key={method} className="flex justify-between items-center">
-                  <span className="text-sm text-slate-600">
-                    {PAYMENT_LABELS[method as keyof typeof PAYMENT_LABELS]}
-                  </span>
-                  <span className="font-medium text-green-600">{formatCurrency(amount)}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6">
-          <h3 className="font-semibold text-slate-900 mb-4">Por tipo de vehículo</h3>
-          {Object.keys(vehicleBreakdown).length === 0 ? (
-            <p className="text-slate-400 text-sm">Sin datos</p>
-          ) : (
-            <div className="space-y-3">
-              {Object.entries(vehicleBreakdown).map(([type, count]) => (
-                <div key={type} className="flex justify-between items-center">
-                  <span className="text-sm text-slate-600">
-                    {VEHICLE_LABELS[type as keyof typeof VEHICLE_LABELS]}
-                  </span>
-                  <span className="font-medium">{count} vehículos</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+      <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6">
+        <h3 className="font-semibold text-slate-900 mb-4">Por tipo de vehículo</h3>
+        {Object.keys(vehicleBreakdown).length === 0 ? (
+          <p className="text-slate-400 text-sm">Sin datos</p>
+        ) : (
+          <div className="space-y-3">
+            {Object.entries(vehicleBreakdown).map(([type, count]) => (
+              <div key={type} className="flex justify-between items-center">
+                <span className="text-sm text-slate-600">
+                  {VEHICLE_LABELS[type as keyof typeof VEHICLE_LABELS]}
+                </span>
+                <span className="font-medium">{count} vehículos</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6">

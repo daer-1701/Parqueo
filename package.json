@@ -10,7 +10,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "setup:users": "node scripts/create-initial-users.mjs"
+    "setup:users": "node scripts/create-initial-users.mjs",
+    "seed:data": "node scripts/seed-parking-data.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.0",
