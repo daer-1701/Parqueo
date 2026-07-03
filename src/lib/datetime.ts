@@ -30,6 +30,11 @@ export function formatBoliviaDateTime(iso: string | Date): string {
   return formatInTimeZone(d, APP_TIMEZONE, 'dd/MM/yyyy HH:mm', { locale: es });
 }
 
+export function formatBoliviaDate(iso: string | Date): string {
+  const d = typeof iso === 'string' ? iso : iso.toISOString();
+  return formatInTimeZone(d, APP_TIMEZONE, 'dd/MM/yyyy', { locale: es });
+}
+
 export function formatBoliviaTime(iso: string | Date): string {
   const d = typeof iso === 'string' ? iso : iso.toISOString();
   return formatInTimeZone(d, APP_TIMEZONE, 'HH:mm', { locale: es });

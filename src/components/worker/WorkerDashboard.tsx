@@ -9,6 +9,7 @@ import {
   getPricingForVehicle,
 } from '@/lib/pricing';
 import { formatBoliviaTime } from '@/lib/datetime';
+import { getPrintServerHint, printEntryLabel } from '@/lib/print-entry-label';
 import { useNow } from '@/hooks/useNow';
 import type {
   ParkingEntry,
@@ -16,7 +17,7 @@ import type {
   VehicleType,
 } from '@/types/database';
 import { VEHICLE_LABELS } from '@/types/database';
-import { Car, Clock, Loader2, Plus, Search } from 'lucide-react';
+import { Car, Clock, Loader2, Plus, Printer, Search } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -32,12 +33,14 @@ function EntryForm({ pricing, userId, onSuccess }: EntryFormProps) {
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [printWarning, setPrintWarning] = useState('');
   const supabase = createClient();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError('');
+    setPrintWarning('');
 
     const normalizedPlate = plate.trim().toUpperCase();
 
@@ -54,17 +57,34 @@ function EntryForm({ pricing, userId, onSuccess }: EntryFormProps) {
       return;
     }
 
-    const { error: insertError } = await supabase.from('parking_entries').insert({
-      plate: normalizedPlate,
-      vehicle_type: vehicleType,
-      notes: notes || null,
-      worker_entry_id: userId,
-    });
+    const { data: entry, error: insertError } = await supabase
+      .from('parking_entries')
+      .insert({
+        plate: normalizedPlate,
+        vehicle_type: vehicleType,
+        notes: notes || null,
+        worker_entry_id: userId,
+      })
+      .select('plate, entry_at')
+      .single();
 
-    if (insertError) {
+    if (insertError || !entry) {
       setError('Error al registrar la entrada');
       setLoading(false);
       return;
+    }
+
+    const printResult = await printEntryLabel({
+      plate: entry.plate,
+      entryAt: entry.entry_at,
+    });
+
+    if (printResult === 'failed') {
+      setPrintWarning('Entrada registrada, pero no se pudo imprimir la etiqueta.');
+    } else if (printResult === 'dialog') {
+      setPrintWarning(
+        `Entrada registrada. ${getPrintServerHint()} para imprimir sin diálogo.`
+      );
     }
 
     setPlate('');
@@ -85,6 +105,12 @@ function EntryForm({ pricing, userId, onSuccess }: EntryFormProps) {
       {error && (
         <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">
           {error}
+        </div>
+      )}
+
+      {printWarning && (
+        <div className="mb-4 p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-sm">
+          {printWarning}
         </div>
       )}
 
@@ -275,9 +301,23 @@ export function WorkerDashboard({
   const [entries, setEntries] = useState(initialEntries);
   const [search, setSearch] = useState('');
   const [checkoutEntry, setCheckoutEntry] = useState<ParkingEntry | null>(null);
+  const [printWarning, setPrintWarning] = useState('');
   const supabase = createClient();
   const router = useRouter();
   const now = useNow(10_000);
+
+  async function handleReprintLabel(entry: ParkingEntry) {
+    setPrintWarning('');
+    const printResult = await printEntryLabel({
+      plate: entry.plate,
+      entryAt: entry.entry_at,
+    });
+    if (printResult === 'failed') {
+      setPrintWarning('No se pudo imprimir la etiqueta.');
+    } else if (printResult === 'dialog') {
+      setPrintWarning(getPrintServerHint());
+    }
+  }
 
   const loadEntries = useCallback(async () => {
     const { data } = await supabase
@@ -330,6 +370,12 @@ export function WorkerDashboard({
           </div>
         </div>
 
+        {printWarning && (
+          <div className="mb-4 p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-sm">
+            {printWarning}
+          </div>
+        )}
+
         {filtered.length === 0 ? (
           <div className="text-center py-12 text-slate-400">
             <Car className="w-12 h-12 mx-auto mb-3 opacity-50" />
@@ -367,12 +413,23 @@ export function WorkerDashboard({
                       </span>
                       <span>Entrada {formatBoliviaTime(entry.entry_at)}</span>
                     </div>
-                    <button
-                      onClick={() => setCheckoutEntry(entry)}
-                      className="w-full py-3 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors touch-manipulation"
-                    >
-                      Cobrar salida
-                    </button>
+                    <div className="flex flex-col gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleReprintLabel(entry)}
+                        className="w-full py-2.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-sm font-medium rounded-lg transition-colors touch-manipulation flex items-center justify-center gap-2"
+                      >
+                        <Printer className="w-4 h-4" />
+                        Reimprimir etiqueta
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCheckoutEntry(entry)}
+                        className="w-full py-3 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors touch-manipulation"
+                      >
+                        Cobrar salida
+                      </button>
+                    </div>
                   </div>
                 );
               })}
@@ -380,7 +437,7 @@ export function WorkerDashboard({
 
             {/* Vista escritorio: tabla */}
             <div className="hidden md:block overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0">
-              <table className="w-full text-sm min-w-[640px]">
+              <table className="w-full text-sm min-w-[720px]">
               <thead>
                 <tr className="border-b border-slate-200 text-left text-slate-500">
                   <th className="pb-3 font-medium">Placa</th>
@@ -409,12 +466,24 @@ export function WorkerDashboard({
                         {formatCurrency(estAmount)}
                       </td>
                       <td className="py-3">
-                        <button
-                          onClick={() => setCheckoutEntry(entry)}
-                          className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-medium rounded-lg transition-colors"
-                        >
-                          Cobrar salida
-                        </button>
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleReprintLabel(entry)}
+                            title="Reimprimir etiqueta"
+                            className="px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-medium rounded-lg transition-colors flex items-center gap-1.5"
+                          >
+                            <Printer className="w-3.5 h-3.5" />
+                            Etiqueta
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setCheckoutEntry(entry)}
+                            className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-medium rounded-lg transition-colors"
+                          >
+                            Cobrar salida
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
