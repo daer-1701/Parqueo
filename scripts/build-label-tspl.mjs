@@ -1,5 +1,5 @@
 /**
- * TSPL — tamaño según driver LABEL (40×30 mm por defecto).
+ * TSPL — 40×30 mm (driver LABEL), una sola etiqueta.
  */
 
 const PAGE_W = Number(process.env.LABEL_PAGE_WIDTH_MM ?? 40);
@@ -12,10 +12,12 @@ export function buildLabelTspl({ plate, date, time }) {
     'DIRECTION 1',
     'DENSITY 12',
     'CLS',
-    'TEXT 30,18,"0",0,1,1,"ENTRADA PARQUEO"',
-    `TEXT 30,55,"0",0,2,2,"${plate}"`,
-    `TEXT 30,110,"0",0,1,1,"${date} ${time}"`,
-    'PRINT 1',
+    'TEXT 8,8,"0",0,1,1,"PARQUEO"',
+    'TEXT 8,22,"0",0,1,1,"Entrada"',
+    `TEXT 8,50,"0",0,2,2,"${plate}"`,
+    `TEXT 8,95,"0",0,1,1,"${date}"`,
+    `TEXT 8,115,"0",0,1,1,"${time}"`,
+    'PRINT 1,1',
   ].join('\r\n');
 
   return Buffer.from(`${tspl}\r\n`, 'ascii');

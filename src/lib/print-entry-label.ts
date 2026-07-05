@@ -1,9 +1,6 @@
 import { formatBoliviaDate, formatBoliviaTime } from '@/lib/datetime';
 
-/**
- * Tamaño de página en Chrome/driver LABEL (ancho × alto).
- * Etiqueta física 3×4 cm; el driver Fujun suele registrar 40×30 mm.
- */
+/** Driver LABEL en Chrome: 40 mm × 30 mm (etiqueta física 3×4 cm) */
 export const LABEL_PAGE_WIDTH_MM = Number(
   process.env.NEXT_PUBLIC_LABEL_PAGE_WIDTH_MM ?? 40
 );
@@ -32,8 +29,11 @@ function escapeHtml(text: string): string {
 }
 
 function buildLabelHtml(plate: string, date: string, time: string): string {
-  const w = LABEL_PAGE_WIDTH_MM;
-  const h = LABEL_PAGE_HEIGHT_MM;
+  const pw = LABEL_PAGE_WIDTH_MM;
+  const ph = LABEL_PAGE_HEIGHT_MM;
+  /** Área útil de la etiqueta física (3×4 cm), rotada para caber en 40×30 del driver */
+  const lw = 28;
+  const lh = ph - 2;
 
   return `<!DOCTYPE html>
 <html lang="es">
@@ -42,89 +42,91 @@ function buildLabelHtml(plate: string, date: string, time: string): string {
   <title>${plate}</title>
   <style>
     @page {
-      size: ${w}mm ${h}mm;
+      size: ${pw}mm ${ph}mm;
       margin: 0;
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body {
-      width: ${w}mm;
-      height: ${h}mm;
-      max-width: ${w}mm;
-      max-height: ${h}mm;
-      overflow: hidden;
+    html {
+      width: ${pw}mm;
+      height: ${ph}mm;
     }
     body {
+      width: ${pw}mm;
+      height: ${ph}mm;
+      max-height: ${ph}mm;
+      overflow: hidden;
+      position: relative;
       font-family: Arial, Helvetica, sans-serif;
-      color: #111;
       background: #fff;
-      display: flex;
-      align-items: center;
-      justify-content: center;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
     }
-    .label {
-      width: ${w - 2}mm;
-      height: ${h - 2}mm;
+    .sheet {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: ${lw}mm;
+      height: ${lh}mm;
+      transform: translate(-50%, -50%) rotate(90deg);
       border: 0.25mm solid #222;
       border-radius: 1mm;
-      padding: 1.2mm 2mm;
-      display: grid;
-      grid-template-rows: auto 1fr auto;
+      padding: 1.5mm 1.2mm;
+      display: flex;
+      flex-direction: column;
       align-items: center;
+      justify-content: space-between;
       text-align: center;
+      color: #111;
     }
-    .head .kicker {
+    .kicker {
       font-size: 4pt;
-      letter-spacing: 0.6px;
       text-transform: uppercase;
+      letter-spacing: 0.5px;
       color: #666;
     }
-    .head .title {
+    .title {
       font-size: 6pt;
       font-weight: bold;
-      letter-spacing: 0.5px;
+      letter-spacing: 0.4px;
     }
     .plate {
-      font-size: 13pt;
+      font-size: 12pt;
       font-weight: 800;
-      letter-spacing: 1px;
+      letter-spacing: 0.8px;
       line-height: 1;
+      width: 100%;
       border-top: 0.2mm solid #000;
       border-bottom: 0.2mm solid #000;
-      padding: 1.2mm 0;
-      width: 100%;
+      padding: 1.5mm 0;
     }
-    .foot {
+    .meta {
       font-size: 5.5pt;
-      line-height: 1.2;
-      color: #333;
+      line-height: 1.3;
     }
-    .foot strong {
-      font-size: 7pt;
-      color: #000;
-      margin-left: 1.5mm;
+    .meta b {
+      display: block;
+      font-size: 7.5pt;
+      margin-top: 0.3mm;
     }
     @media print {
       html, body {
-        width: ${w}mm !important;
-        height: ${h}mm !important;
-        max-height: ${h}mm !important;
+        width: ${pw}mm !important;
+        height: ${ph}mm !important;
+        max-height: ${ph}mm !important;
         overflow: hidden !important;
-        page-break-before: avoid;
-        page-break-after: avoid;
       }
+      body { page-break-after: avoid; page-break-before: avoid; }
     }
   </style>
 </head>
 <body>
-  <div class="label">
-    <div class="head">
+  <div class="sheet">
+    <div>
       <div class="kicker">Entrada</div>
       <div class="title">PARQUEO</div>
     </div>
     <div class="plate">${plate}</div>
-    <div class="foot">${date}<strong>${time}</strong></div>
+    <div class="meta">${date}<b>${time}</b></div>
   </div>
 </body>
 </html>`;
@@ -171,27 +173,23 @@ function printWithDialog(data: EntryLabelData): boolean {
   frameDoc.write(html);
   frameDoc.close();
 
-  let printed = false;
-  const cleanup = () => {
-    iframe.remove();
-  };
+  let done = false;
+  const cleanup = () => iframe.remove();
 
-  const triggerPrint = () => {
-    if (printed) return;
-    printed = true;
-    setTimeout(() => {
+  const runPrint = () => {
+    if (done) return;
+    done = true;
+    window.setTimeout(() => {
       try {
         frameWindow.focus();
         frameWindow.print();
-      } catch {
-        cleanup();
-        return;
+      } finally {
+        window.setTimeout(cleanup, 2500);
       }
-      setTimeout(cleanup, 2000);
-    }, 300);
+    }, 400);
   };
 
-  iframe.onload = triggerPrint;
+  iframe.onload = runPrint;
 
   return true;
 }
@@ -207,5 +205,5 @@ export async function printEntryLabel(data: EntryLabelData): Promise<PrintResult
 }
 
 export function getPrintDialogHint(): string {
-  return `Papel ${LABEL_PAGE_WIDTH_MM}×${LABEL_PAGE_HEIGHT_MM} mm · Márgenes: Ninguno · Copias: 1`;
+  return `Papel ${LABEL_PAGE_WIDTH_MM}×${LABEL_PAGE_HEIGHT_MM} mm · Copias: 1 · Márgenes: Ninguno`;
 }
