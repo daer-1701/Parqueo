@@ -1,8 +1,15 @@
 import { formatBoliviaDate, formatBoliviaTime } from '@/lib/datetime';
 
-/** Etiqueta: 3 cm ancho × 4 cm alto (30 × 40 mm) */
-export const LABEL_WIDTH_MM = 30;
-export const LABEL_HEIGHT_MM = 40;
+/**
+ * Tamaño de página en Chrome/driver LABEL (ancho × alto).
+ * Etiqueta física 3×4 cm; el driver Fujun suele registrar 40×30 mm.
+ */
+export const LABEL_PAGE_WIDTH_MM = Number(
+  process.env.NEXT_PUBLIC_LABEL_PAGE_WIDTH_MM ?? 40
+);
+export const LABEL_PAGE_HEIGHT_MM = Number(
+  process.env.NEXT_PUBLIC_LABEL_PAGE_HEIGHT_MM ?? 30
+);
 
 const PRINT_SERVER_URL =
   process.env.NEXT_PUBLIC_PRINT_SERVER_URL?.trim() || 'http://127.0.0.1:3847';
@@ -25,8 +32,8 @@ function escapeHtml(text: string): string {
 }
 
 function buildLabelHtml(plate: string, date: string, time: string): string {
-  const w = LABEL_WIDTH_MM;
-  const h = LABEL_HEIGHT_MM;
+  const w = LABEL_PAGE_WIDTH_MM;
+  const h = LABEL_PAGE_HEIGHT_MM;
 
   return `<!DOCTYPE html>
 <html lang="es">
@@ -57,59 +64,46 @@ function buildLabelHtml(plate: string, date: string, time: string): string {
       print-color-adjust: exact;
     }
     .label {
-      width: 26mm;
-      height: 34mm;
+      width: ${w - 2}mm;
+      height: ${h - 2}mm;
       border: 0.25mm solid #222;
-      border-radius: 1.2mm;
-      padding: 2mm 1.5mm;
-      display: flex;
-      flex-direction: column;
+      border-radius: 1mm;
+      padding: 1.2mm 2mm;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
       align-items: center;
-      justify-content: space-between;
       text-align: center;
     }
-    .head {
-      width: 100%;
-    }
-    .kicker {
-      font-size: 4.5pt;
-      letter-spacing: 0.8px;
-      text-transform: uppercase;
-      color: #555;
-      line-height: 1.2;
-    }
-    .title {
-      font-size: 6.5pt;
-      font-weight: bold;
+    .head .kicker {
+      font-size: 4pt;
       letter-spacing: 0.6px;
-      line-height: 1.2;
-      margin-top: 0.3mm;
+      text-transform: uppercase;
+      color: #666;
     }
-    .plate-wrap {
-      width: 100%;
-      border-top: 0.2mm solid #000;
-      border-bottom: 0.2mm solid #000;
-      padding: 1.8mm 0;
+    .head .title {
+      font-size: 6pt;
+      font-weight: bold;
+      letter-spacing: 0.5px;
     }
     .plate {
-      font-size: 11pt;
+      font-size: 13pt;
       font-weight: 800;
-      letter-spacing: 0.8px;
+      letter-spacing: 1px;
       line-height: 1;
-      word-break: break-all;
+      border-top: 0.2mm solid #000;
+      border-bottom: 0.2mm solid #000;
+      padding: 1.2mm 0;
+      width: 100%;
     }
     .foot {
-      width: 100%;
-      line-height: 1.25;
-    }
-    .date {
       font-size: 5.5pt;
+      line-height: 1.2;
       color: #333;
     }
-    .time {
-      font-size: 8pt;
-      font-weight: bold;
-      margin-top: 0.4mm;
+    .foot strong {
+      font-size: 7pt;
+      color: #000;
+      margin-left: 1.5mm;
     }
     @media print {
       html, body {
@@ -120,9 +114,6 @@ function buildLabelHtml(plate: string, date: string, time: string): string {
         page-break-before: avoid;
         page-break-after: avoid;
       }
-      .label {
-        page-break-inside: avoid;
-      }
     }
   </style>
 </head>
@@ -132,13 +123,8 @@ function buildLabelHtml(plate: string, date: string, time: string): string {
       <div class="kicker">Entrada</div>
       <div class="title">PARQUEO</div>
     </div>
-    <div class="plate-wrap">
-      <div class="plate">${plate}</div>
-    </div>
-    <div class="foot">
-      <div class="date">${date}</div>
-      <div class="time">${time}</div>
-    </div>
+    <div class="plate">${plate}</div>
+    <div class="foot">${date}<strong>${time}</strong></div>
   </div>
 </body>
 </html>`;
@@ -221,5 +207,5 @@ export async function printEntryLabel(data: EntryLabelData): Promise<PrintResult
 }
 
 export function getPrintDialogHint(): string {
-  return 'Papel 30×40 mm · Márgenes: Ninguno · Copias: 1 · Sin encabezados.';
+  return `Papel ${LABEL_PAGE_WIDTH_MM}×${LABEL_PAGE_HEIGHT_MM} mm · Márgenes: Ninguno · Copias: 1`;
 }
