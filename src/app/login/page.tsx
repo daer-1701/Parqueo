@@ -61,7 +61,7 @@ export default function LoginPage() {
 
         <form
           onSubmit={handleLogin}
-          className="bg-white/10 backdrop-blur-lg rounded-2xl p-5 sm:p-8 border border-white/20 shadow-xl"
+          className="bg-white/10 rounded-2xl p-5 sm:p-8 border border-white/20 shadow-xl"
         >
           <h2 className="text-lg sm:text-xl font-semibold text-white mb-5 sm:mb-6">Iniciar sesión</h2>
 

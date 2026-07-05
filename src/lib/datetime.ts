@@ -8,6 +8,7 @@ import {
   startOfDay,
   startOfMonth,
   startOfWeek,
+  subDays,
 } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { formatInTimeZone, fromZonedTime, toZonedTime } from 'date-fns-tz';
@@ -130,4 +131,11 @@ export function formatBoliviaNow(): string {
   return formatInTimeZone(new Date(), APP_TIMEZONE, "EEEE d 'de' MMMM, HH:mm", {
     locale: es,
   });
+}
+
+/** ISO UTC para consultas Supabase: inicio del día hace N días (zona Bolivia) */
+export function getBoliviaLookbackIso(days: number): string {
+  const zoned = toZonedTime(new Date(), APP_TIMEZONE);
+  const start = fromZonedTime(startOfDay(subDays(zoned, days)), APP_TIMEZONE);
+  return start.toISOString();
 }

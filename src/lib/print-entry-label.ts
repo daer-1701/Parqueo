@@ -1,11 +1,14 @@
 import { formatBoliviaDate, formatBoliviaTime } from '@/lib/datetime';
 
-/** Etiqueta térmica Tomate T-IM50002: 3 cm × 4 cm */
-const LABEL_WIDTH_MM = 30;
-const LABEL_HEIGHT_MM = 40;
+/** Etiqueta térmica: 3 cm × 4 cm (30 × 40 mm) */
+export const LABEL_WIDTH_MM = 30;
+export const LABEL_HEIGHT_MM = 40;
 
 const PRINT_SERVER_URL =
   process.env.NEXT_PUBLIC_PRINT_SERVER_URL?.trim() || 'http://127.0.0.1:3847';
+
+/** Solo intenta impresión directa si está en true (opcional) */
+const PRINT_DIRECT = process.env.NEXT_PUBLIC_PRINT_DIRECT === 'true';
 
 export interface EntryLabelData {
   plate: string;
@@ -36,6 +39,8 @@ function buildLabelHtml(plate: string, date: string, time: string): string {
     html, body {
       width: ${LABEL_WIDTH_MM}mm;
       height: ${LABEL_HEIGHT_MM}mm;
+      max-width: ${LABEL_WIDTH_MM}mm;
+      max-height: ${LABEL_HEIGHT_MM}mm;
       overflow: hidden;
     }
     * {
@@ -47,52 +52,47 @@ function buildLabelHtml(plate: string, date: string, time: string): string {
       font-family: Arial, Helvetica, sans-serif;
       color: #000;
       background: #fff;
-      padding: 2mm 1.5mm;
+      padding: 1.5mm 1mm;
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: space-between;
+      justify-content: center;
+      gap: 1mm;
       text-align: center;
     }
     .title {
-      font-size: 7pt;
+      font-size: 6.5pt;
       font-weight: bold;
-      letter-spacing: 0.3px;
+      letter-spacing: 0.2px;
+      line-height: 1.1;
       width: 100%;
     }
     .divider {
       border-top: 1px dashed #000;
-      width: 100%;
-      margin: 1mm 0;
+      width: 92%;
     }
     .plate {
-      font-size: 14pt;
+      font-size: 12pt;
       font-weight: bold;
-      letter-spacing: 0.8px;
-      line-height: 1.05;
+      letter-spacing: 0.5px;
+      line-height: 1;
       word-break: break-all;
       width: 100%;
       padding: 0.5mm 0;
     }
-    .meta {
-      width: 100%;
-      display: flex;
-      flex-direction: column;
-      gap: 0.8mm;
-    }
     .date {
-      font-size: 7.5pt;
+      font-size: 7pt;
       line-height: 1.1;
     }
     .time {
-      font-size: 10pt;
+      font-size: 9pt;
       font-weight: bold;
       line-height: 1.1;
     }
     @media print {
       html, body {
-        width: ${LABEL_WIDTH_MM}mm;
-        height: ${LABEL_HEIGHT_MM}mm;
+        width: ${LABEL_WIDTH_MM}mm !important;
+        height: ${LABEL_HEIGHT_MM}mm !important;
       }
       body {
         -webkit-print-color-adjust: exact;
@@ -106,10 +106,8 @@ function buildLabelHtml(plate: string, date: string, time: string): string {
   <div class="divider"></div>
   <div class="plate">${plate}</div>
   <div class="divider"></div>
-  <div class="meta">
-    <div class="date">${date}</div>
-    <div class="time">${time}</div>
-  </div>
+  <div class="date">${date}</div>
+  <div class="time">${time}</div>
 </body>
 </html>`;
 }
@@ -182,17 +180,20 @@ function printWithDialog(data: EntryLabelData): boolean {
 }
 
 /**
- * Imprime etiqueta 3×4 cm. Intenta impresión directa vía servicio local;
- * si no está activo, usa el diálogo del navegador como respaldo.
+ * Imprime etiqueta 3×4 cm (30×40 mm).
+ * Por defecto abre el diálogo del navegador (impresora LABEL).
+ * Impresión directa solo si NEXT_PUBLIC_PRINT_DIRECT=true.
  */
 export async function printEntryLabel(data: EntryLabelData): Promise<PrintResult> {
-  const direct = await printDirect(data);
-  if (direct) return 'direct';
+  if (PRINT_DIRECT) {
+    const direct = await printDirect(data);
+    if (direct) return 'direct';
+  }
 
   const dialog = printWithDialog(data);
   return dialog ? 'dialog' : 'failed';
 }
 
-export function getPrintServerHint(): string {
-  return 'Inicia el servicio de impresión: npm run print:server';
+export function getPrintDialogHint(): string {
+  return 'En Imprimir: elige LABEL, desactiva encabezados y usa papel 30×40 mm.';
 }

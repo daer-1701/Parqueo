@@ -33,9 +33,14 @@ const comPort = process.env.PRINT_COM_PORT?.trim();
 const baudRate = Number(process.env.PRINT_BAUD_RATE ?? 9600);
 const printerName = process.env.PRINTER_NAME?.trim();
 const mode = (process.env.PRINT_MODE ?? 'tspl').trim().toLowerCase();
+const via = (process.env.PRINT_VIA ?? (printerName ? 'windows' : 'com')).trim().toLowerCase();
 
-if (!comPort && !printerName) {
-  console.error('Falta PRINT_COM_PORT o PRINTER_NAME en .env.local');
+if (via === 'com' && !comPort) {
+  console.error('Falta PRINT_COM_PORT en .env.local');
+  process.exit(1);
+}
+if (via === 'windows' && !printerName) {
+  console.error('Falta PRINTER_NAME en .env.local');
   process.exit(1);
 }
 
@@ -58,7 +63,7 @@ const buffer =
     ? buildLabelEscPos({ plate: 'PRUEBA01', date, time })
     : buildLabelTspl({ plate: 'PRUEBA01', date, time });
 
-if (comPort) {
+if (via === 'com') {
   console.log(`Imprimiendo por ${comPort} @ ${baudRate} (${mode.toUpperCase()})`);
   await sendToComPort(comPort, baudRate, buffer);
 } else {

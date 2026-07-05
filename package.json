@@ -16,7 +16,8 @@
     "print:server": "node scripts/print-server.mjs",
     "print:list": "node scripts/list-printers.mjs",
     "print:test": "node scripts/print-test.mjs",
-    "print:scan": "node scripts/print-scan.mjs"
+    "print:scan": "node scripts/print-scan.mjs",
+    "print:detect": "node scripts/print-detect.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.0",

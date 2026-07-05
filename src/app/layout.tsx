@@ -1,27 +1,16 @@
-import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
-import "./globals.css";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+import type { Metadata, Viewport } from 'next';
+import './globals.css';
 
 export const metadata: Metadata = {
-  title: "ParqueoSys — Sistema de Parqueo",
-  description: "Gestión de parqueo con roles Admin y Operador",
+  title: 'ParqueoSys — Sistema de Parqueo',
+  description: 'Gestión de parqueo con roles Admin y Operador',
 };
 
 export const viewport: Viewport = {
-  width: "device-width",
+  width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
-  viewportFit: "cover",
+  viewportFit: 'cover',
 };
 
 export default function RootLayout({
@@ -30,10 +19,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="es"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
+    <html lang="es" className="h-full antialiased">
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );

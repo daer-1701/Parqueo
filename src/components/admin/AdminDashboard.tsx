@@ -14,22 +14,24 @@ import {
   type ReportFilter,
   type ReportPeriod,
 } from '@/lib/datetime';
+import { addDays, endOfDay, parseISO, startOfDay } from 'date-fns';
+import { fromZonedTime, toZonedTime } from 'date-fns-tz';
 import { formatCurrency } from '@/lib/pricing';
 import type { ParkingEntry, ReportPeriodData, ReportSummary } from '@/types/database';
 import { VEHICLE_LABELS } from '@/types/database';
-import { addDays, endOfDay, parseISO, startOfDay } from 'date-fns';
-import { fromZonedTime, toZonedTime } from 'date-fns-tz';
 import { CalendarRange } from 'lucide-react';
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
+import dynamic from 'next/dynamic';
 import { useMemo, useState } from 'react';
+
+const AdminRevenueChart = dynamic(
+  () => import('./AdminRevenueChart').then((m) => m.AdminRevenueChart),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="w-full h-[220px] sm:h-[280px] bg-slate-100 animate-pulse rounded-lg" />
+    ),
+  }
+);
 
 interface AdminDashboardProps {
   entries: ParkingEntry[];
@@ -45,16 +47,18 @@ function buildChartData(entries: ParkingEntry[], range: BoliviaDateRange): Repor
   const isSingleDay = range.days === 1;
 
   if (isSingleDay) {
-    return Array.from({ length: 24 }, (_, hour) => {
-      const hourEntries = entries.filter(
-        (e) => e.exit_at && getBoliviaHour(e.exit_at) === hour
-      );
-      return {
-        period: `${hour.toString().padStart(2, '0')}:00`,
-        entries: hourEntries.length,
-        revenue: hourEntries.reduce((sum, e) => sum + (e.amount ?? 0), 0),
-      };
-    });
+    const buckets: ReportPeriodData[] = Array.from({ length: 24 }, (_, hour) => ({
+      period: `${hour.toString().padStart(2, '0')}:00`,
+      entries: 0,
+      revenue: 0,
+    }));
+    for (const e of entries) {
+      if (!e.exit_at) continue;
+      const hour = getBoliviaHour(e.exit_at);
+      buckets[hour].entries += 1;
+      buckets[hour].revenue += e.amount ?? 0;
+    }
+    return buckets;
   }
 
   const chartDays: { start: Date; end: Date; labelDate: Date }[] = [];
@@ -70,20 +74,31 @@ function buildChartData(entries: ParkingEntry[], range: BoliviaDateRange): Repor
   }
 
   const useWeekdayLabels = range.days <= 7;
+  const buckets = chartDays.map(({ start: dayStart, end: dayEnd, labelDate }) => ({
+    period: formatBoliviaDayLabel(labelDate, useWeekdayLabels),
+    entries: 0,
+    revenue: 0,
+    dayStart,
+    dayEnd,
+  }));
 
-  return chartDays.map(({ start: dayStart, end: dayEnd, labelDate }) => {
-    const dayEntries = entries.filter((e) => {
-      if (!e.exit_at) return false;
-      const exitDate = parseISO(e.exit_at);
-      return exitDate >= dayStart && exitDate <= dayEnd;
-    });
+  for (const e of entries) {
+    if (!e.exit_at) continue;
+    const exitDate = parseISO(e.exit_at);
+    for (const bucket of buckets) {
+      if (exitDate >= bucket.dayStart && exitDate <= bucket.dayEnd) {
+        bucket.entries += 1;
+        bucket.revenue += e.amount ?? 0;
+        break;
+      }
+    }
+  }
 
-    return {
-      period: formatBoliviaDayLabel(labelDate, useWeekdayLabels),
-      entries: dayEntries.length,
-      revenue: dayEntries.reduce((sum, e) => sum + (e.amount ?? 0), 0),
-    };
-  });
+  return buckets.map(({ period, entries: count, revenue }) => ({
+    period,
+    entries: count,
+    revenue,
+  }));
 }
 
 function computeSummary(entries: ParkingEntry[]): ReportSummary {
@@ -255,29 +270,11 @@ export function AdminDashboard({ entries }: AdminDashboardProps) {
         <h2 className="text-base sm:text-lg font-semibold text-slate-900 mb-4">
           Ingresos — {rangeLabel}
         </h2>
-        <div className="w-full h-[220px] sm:h-[280px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} margin={{ top: 4, right: 4, left: -16, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis
-                dataKey="period"
-                tick={{ fontSize: 10 }}
-                interval={isSingleDay ? 2 : chartTicksDense ? 2 : 0}
-                angle={chartTicksDense ? -35 : 0}
-                textAnchor={chartTicksDense ? 'end' : 'middle'}
-                height={chartTicksDense ? 50 : 30}
-              />
-              <YAxis tick={{ fontSize: 10 }} width={40} />
-            <Tooltip
-              formatter={(value, name) => [
-                name === 'revenue' ? formatCurrency(Number(value)) : value,
-                name === 'revenue' ? 'Ingresos' : 'Vehículos',
-              ]}
-            />
-            <Bar dataKey="revenue" fill="#2563eb" radius={[4, 4, 0, 0]} name="revenue" />
-          </BarChart>
-        </ResponsiveContainer>
-        </div>
+        <AdminRevenueChart
+          data={chartData}
+          isSingleDay={isSingleDay}
+          chartTicksDense={chartTicksDense}
+        />
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6">

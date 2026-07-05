@@ -1,6 +1,5 @@
 'use client';
 
-import { formatBoliviaNow, formatBoliviaTime } from '@/lib/datetime';
 import { createClient } from '@/lib/supabase/client';
 import { Clock, LogOut } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -16,16 +15,18 @@ interface NavbarProps {
 export function Navbar({ title, shortTitle, userName, role }: NavbarProps) {
   const router = useRouter();
   const supabase = createClient();
-  const [boliviaTime, setBoliviaTime] = useState('');
   const [boliviaTimeShort, setBoliviaTimeShort] = useState('');
 
   useEffect(() => {
-    const update = () => {
-      setBoliviaTime(formatBoliviaNow());
-      setBoliviaTimeShort(formatBoliviaTime(new Date()));
-    };
+    const formatter = new Intl.DateTimeFormat('es-BO', {
+      timeZone: 'America/La_Paz',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+    const update = () => setBoliviaTimeShort(formatter.format(new Date()));
     update();
-    const interval = setInterval(update, 30_000);
+    const interval = setInterval(update, 60_000);
     return () => clearInterval(interval);
   }, []);
 
@@ -49,15 +50,9 @@ export function Navbar({ title, shortTitle, userName, role }: NavbarProps) {
 
           <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
             {boliviaTimeShort && (
-              <span className="flex sm:hidden items-center gap-1 text-[11px] text-slate-500 tabular-nums">
-                <Clock className="w-3 h-3 shrink-0" />
-                {boliviaTimeShort}
-              </span>
-            )}
-            {boliviaTime && (
-              <span className="hidden md:flex items-center gap-1.5 text-xs text-slate-500 max-w-[200px] lg:max-w-none">
+              <span className="hidden md:flex items-center gap-1.5 text-xs text-slate-500 tabular-nums">
                 <Clock className="w-3.5 h-3.5 shrink-0" />
-                <span className="truncate">{boliviaTime}</span>
+                {boliviaTimeShort}
               </span>
             )}
             <span className="text-xs sm:text-sm text-slate-600 hidden min-[480px]:block max-w-[100px] sm:max-w-[140px] truncate">

@@ -6,10 +6,11 @@
  *   npm run print:server
  *
  * Variables en .env.local:
- *   PRINT_COM_PORT=COM8          (recomendado para Tomate Bluetooth)
+ *   Driver oficial: https://www.cnfujun.com/d/39
+ *   PRINT_COM_PORT=COM8          (Bluetooth Tomate, o npm run print:detect)
  *   PRINT_BAUD_RATE=9600
  *   PRINT_MODE=tspl              tspl | escpos
- *   PRINTER_NAME=POS-58          (solo si no usas COM)
+ *   PRINTER_NAME=LABEL-Printer   (driver oficial Fujun, vía Windows)
  */
 
 import http from 'http';
@@ -19,6 +20,7 @@ import { fileURLToPath } from 'url';
 import { buildLabelEscPos } from './build-label-escpos.mjs';
 import { buildLabelTspl } from './build-label-tspl.mjs';
 import { sendToComPort } from './com-print.mjs';
+import { detectTomateComPort } from './detect-com-port.mjs';
 import { sendRawToPrinter } from './win-raw-print.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -43,9 +45,10 @@ function loadEnv() {
 loadEnv();
 
 const PRINTER_NAME = process.env.PRINTER_NAME?.trim();
-const PRINT_COM_PORT = process.env.PRINT_COM_PORT?.trim();
+const PRINT_COM_PORT =
+  process.env.PRINT_COM_PORT?.trim() || detectTomateComPort() || null;
 const PRINT_BAUD_RATE = Number(process.env.PRINT_BAUD_RATE ?? 9600);
-const PRINT_MODE = (process.env.PRINT_MODE ?? 'tspl').trim().toLowerCase();
+const PRINT_VIA = (process.env.PRINT_VIA ?? (PRINTER_NAME ? 'windows' : 'com')).trim().toLowerCase();
 
 function formatBoliviaDate(iso) {
   return new Intl.DateTimeFormat('es-BO', {
@@ -77,18 +80,24 @@ async function printLabel({ plate, entryAt }) {
   const time = formatBoliviaTime(entryAt);
   const buffer = buildPrintBuffer({ plate, date, time });
 
+  if (PRINT_VIA === 'com' && PRINT_COM_PORT) {
+    await sendToComPort(PRINT_COM_PORT, PRINT_BAUD_RATE, buffer);
+    return;
+  }
+
+  if (PRINTER_NAME) {
+    await sendRawToPrinter(PRINTER_NAME, buffer);
+    return;
+  }
+
   if (PRINT_COM_PORT) {
     await sendToComPort(PRINT_COM_PORT, PRINT_BAUD_RATE, buffer);
     return;
   }
 
-  if (!PRINTER_NAME) {
-    throw new Error(
-      'Configura PRINT_COM_PORT=COM8 (Tomate Bluetooth) o PRINTER_NAME en .env.local'
-    );
-  }
-
-  await sendRawToPrinter(PRINTER_NAME, buffer);
+  throw new Error(
+    'Configura PRINTER_NAME=LABEL (driver oficial) o PRINT_COM_PORT=COM8 en .env.local'
+  );
 }
 
 function readJsonBody(req) {
@@ -134,6 +143,7 @@ const server = http.createServer(async (req, res) => {
       comPort: PRINT_COM_PORT ?? null,
       baudRate: PRINT_COM_PORT ? PRINT_BAUD_RATE : null,
       mode: PRINT_MODE,
+      via: PRINT_VIA,
       printer: PRINTER_NAME ?? null,
     });
     return;
@@ -166,14 +176,14 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, '127.0.0.1', () => {
   console.log(`🖨️  Servicio de impresión en http://127.0.0.1:${PORT}`);
-  if (PRINT_COM_PORT) {
-    console.log(`   Puerto COM: ${PRINT_COM_PORT} @ ${PRINT_BAUD_RATE} (${PRINT_MODE.toUpperCase()})`);
-  } else if (PRINTER_NAME) {
+  if (PRINT_VIA === 'windows' && PRINTER_NAME) {
     console.log(`   Impresora Windows: ${PRINTER_NAME} (${PRINT_MODE.toUpperCase()})`);
+  } else if (PRINT_COM_PORT) {
+    console.log(`   Puerto COM: ${PRINT_COM_PORT} @ ${PRINT_BAUD_RATE} (${PRINT_MODE.toUpperCase()})`);
   } else {
     console.log('   ⚠️  Agrega en .env.local:');
-    console.log('      PRINT_COM_PORT=COM8');
-    console.log('      PRINT_BAUD_RATE=9600');
+    console.log('      PRINTER_NAME=LABEL');
+    console.log('      PRINT_VIA=windows');
     console.log('      PRINT_MODE=tspl');
   }
   console.log('   Deja esta ventana abierta mientras usas el panel de operador.\n');

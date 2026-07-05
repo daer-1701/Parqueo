@@ -14,7 +14,7 @@ export default async function WorkerPage() {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('*')
+    .select('role, full_name')
     .eq('id', user.id)
     .single();
 
@@ -25,10 +25,12 @@ export default async function WorkerPage() {
   const [{ data: entries }, { data: pricing }] = await Promise.all([
     supabase
       .from('parking_entries')
-      .select('*')
+      .select(
+        'id, plate, vehicle_type, entry_at, exit_at, amount, status, payment_method, notes, worker_entry_id, worker_exit_id, created_at'
+      )
       .eq('status', 'active')
       .order('entry_at', { ascending: false }),
-    supabase.from('pricing_config').select('*'),
+    supabase.from('pricing_config').select('id, vehicle_type, first_hour_rate, extra_hour_rate, grace_minutes, updated_at'),
   ]);
 
   return (
