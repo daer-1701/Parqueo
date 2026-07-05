@@ -18,7 +18,7 @@ import { readFileSync, existsSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { buildLabelEscPos } from './build-label-escpos.mjs';
-import { buildLabelTspl } from './build-label-tspl.mjs';
+import { buildLabelTsplAuto } from './build-label-tspl.mjs';
 import { sendToComPort } from './com-print.mjs';
 import { detectTomateComPort } from './detect-com-port.mjs';
 import { sendRawToPrinter } from './win-raw-print.mjs';
@@ -49,6 +49,7 @@ const PRINT_COM_PORT =
   process.env.PRINT_COM_PORT?.trim() || detectTomateComPort() || null;
 const PRINT_BAUD_RATE = Number(process.env.PRINT_BAUD_RATE ?? 9600);
 const PRINT_VIA = (process.env.PRINT_VIA ?? (PRINTER_NAME ? 'windows' : 'com')).trim().toLowerCase();
+const PRINT_MODE = (process.env.PRINT_MODE ?? 'tspl').trim().toLowerCase();
 
 function formatBoliviaDate(iso) {
   return new Intl.DateTimeFormat('es-BO', {
@@ -72,7 +73,7 @@ function buildPrintBuffer({ plate, date, time }) {
   if (PRINT_MODE === 'escpos') {
     return buildLabelEscPos({ plate, date, time });
   }
-  return buildLabelTspl({ plate, date, time });
+  return buildLabelTsplAuto({ plate, date, time });
 }
 
 async function printLabel({ plate, entryAt }) {
@@ -121,10 +122,19 @@ function readJsonBody(req) {
   });
 }
 
-function sendJson(res, status, payload) {
+function sendJson(res, status, payload, req) {
+  const origin = req.headers.origin;
+  let allowOrigin = '*';
+  if (origin) {
+    const local =
+      origin.startsWith('http://localhost') || origin.startsWith('http://127.0.0.1');
+    const vercel = origin.includes('vercel.app');
+    if (local || vercel) allowOrigin = origin;
+  }
+
   res.writeHead(status, {
     'Content-Type': 'application/json',
-    'Access-Control-Allow-Origin': APP_ORIGIN,
+    'Access-Control-Allow-Origin': allowOrigin,
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
   });
@@ -133,7 +143,7 @@ function sendJson(res, status, payload) {
 
 const server = http.createServer(async (req, res) => {
   if (req.method === 'OPTIONS') {
-    sendJson(res, 204, {});
+    sendJson(res, 204, {}, req);
     return;
   }
 
@@ -145,7 +155,7 @@ const server = http.createServer(async (req, res) => {
       mode: PRINT_MODE,
       via: PRINT_VIA,
       printer: PRINTER_NAME ?? null,
-    });
+    }, req);
     return;
   }
 
@@ -153,7 +163,7 @@ const server = http.createServer(async (req, res) => {
     try {
       const body = await readJsonBody(req);
       if (!body.plate?.trim() || !body.entryAt) {
-        sendJson(res, 400, { ok: false, error: 'plate y entryAt son obligatorios' });
+        sendJson(res, 400, { ok: false, error: 'plate y entryAt son obligatorios' }, req);
         return;
       }
 
@@ -162,16 +172,16 @@ const server = http.createServer(async (req, res) => {
         entryAt: body.entryAt,
       });
 
-      sendJson(res, 200, { ok: true });
+      sendJson(res, 200, { ok: true }, req);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Error al imprimir';
       console.error('❌', message);
-      sendJson(res, 500, { ok: false, error: message });
+      sendJson(res, 500, { ok: false, error: message }, req);
     }
     return;
   }
 
-  sendJson(res, 404, { ok: false, error: 'No encontrado' });
+  sendJson(res, 404, { ok: false, error: 'No encontrado' }, req);
 });
 
 server.listen(PORT, '127.0.0.1', () => {

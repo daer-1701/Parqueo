@@ -1,12 +1,16 @@
 /**
- * Prueba de impresión directa (sin abrir la app).
- * Uso: npm run print:test
+ * Calibración: imprime borde + texto para ver si cae en una sola etiqueta.
+ * Uso: npm run print:calibrate
+ *
+ * Ajusta en .env.local:
+ *   LABEL_Y_SHIFT_DOTS=20   (bajar contenido; negativo = subir)
+ *   LABEL_TSPL_VARIANT=40x30 | 30x40
+ *   LABEL_GAP_MM=2
  */
 
 import { readFileSync, existsSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { buildLabelEscPos } from './build-label-escpos.mjs';
 import { buildLabelTsplAuto } from './build-label-tspl.mjs';
 import { sendToComPort } from './com-print.mjs';
 import { sendRawToPrinter } from './win-raw-print.mjs';
@@ -29,20 +33,14 @@ function loadEnv() {
 
 loadEnv();
 
+process.env.LABEL_TSPL_DEBUG = 'true';
+
 const comPort = process.env.PRINT_COM_PORT?.trim();
 const baudRate = Number(process.env.PRINT_BAUD_RATE ?? 9600);
 const printerName = process.env.PRINTER_NAME?.trim();
-const mode = (process.env.PRINT_MODE ?? 'tspl').trim().toLowerCase();
-const via = (process.env.PRINT_VIA ?? (printerName ? 'windows' : 'com')).trim().toLowerCase();
-
-if (via === 'com' && !comPort) {
-  console.error('Falta PRINT_COM_PORT en .env.local');
-  process.exit(1);
-}
-if (via === 'windows' && !printerName) {
-  console.error('Falta PRINTER_NAME en .env.local');
-  process.exit(1);
-}
+const via = (process.env.PRINT_VIA ?? 'com').trim().toLowerCase();
+const yShift = process.env.LABEL_Y_SHIFT_DOTS ?? '0';
+const size = `${process.env.LABEL_TSPL_WIDTH_MM ?? 40}x${process.env.LABEL_TSPL_HEIGHT_MM ?? 30}`;
 
 const now = new Date();
 const date = new Intl.DateTimeFormat('es-BO', {
@@ -58,17 +56,20 @@ const time = new Intl.DateTimeFormat('es-BO', {
   hour12: false,
 }).format(now);
 
-const buffer =
-  mode === 'escpos'
-    ? buildLabelEscPos({ plate: 'PRUEBA01', date, time })
-    : buildLabelTsplAuto({ plate: 'PRUEBA01', date, time });
+const buffer = buildLabelTsplAuto({ plate: 'CALIB01', date, time });
 
-if (via === 'com') {
-  console.log(`Imprimiendo por ${comPort} @ ${baudRate} (${mode.toUpperCase()})`);
+console.log(`Calibración TSPL (${size} mm, Y_SHIFT=${yShift}, DEBUG=borde)`);
+
+if (via === 'com' && comPort) {
+  console.log(`Puerto: ${comPort} @ ${baudRate}`);
   await sendToComPort(comPort, baudRate, buffer);
-} else {
-  console.log(`Imprimiendo en: ${printerName} (${mode.toUpperCase()})`);
+} else if (printerName) {
+  console.log(`Impresora: ${printerName}`);
   await sendRawToPrinter(printerName, buffer);
+} else {
+  console.error('Configura PRINT_COM_PORT o PRINTER_NAME en .env.local');
+  process.exit(1);
 }
 
-console.log('Etiqueta enviada. Revisa la impresora.');
+console.log('Etiqueta de calibración enviada.');
+console.log('Si el borde no coincide, ajusta LABEL_Y_SHIFT_DOTS o LABEL_TSPL_HEIGHT_MM.');

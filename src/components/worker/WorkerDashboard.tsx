@@ -8,8 +8,9 @@ import {
   formatPricingSummary,
   getPricingForVehicle,
 } from '@/lib/pricing';
-import { formatBoliviaTime } from '@/lib/datetime';
-import { getPrintDialogHint } from '@/lib/print-entry-label';
+import { APP_TIMEZONE, formatBoliviaTime } from '@/lib/datetime';
+import { hasActiveMonthlyPlate } from '@/lib/monthly-parking';
+import { formatInTimeZone } from 'date-fns-tz';
 import { useNow } from '@/hooks/useNow';
 import type {
   ParkingEntry,
@@ -17,8 +18,24 @@ import type {
   VehicleType,
 } from '@/types/database';
 import { VEHICLE_LABELS } from '@/types/database';
-import { Car, Clock, Loader2, Plus, Printer, Search } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Car, Clock, Loader2, Plus, Printer, Search, Banknote } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
+function parseMoneyInput(value: string): number {
+  const normalized = value.trim().replace(',', '.');
+  if (!normalized) return 0;
+  const n = Number.parseFloat(normalized);
+  return Number.isFinite(n) && n >= 0 ? n : 0;
+}
+
+function getQuickCashAmounts(total: number): number[] {
+  const options = new Set<number>();
+  options.add(Math.round(total * 100) / 100);
+  for (const bill of [5, 10, 20, 50, 100, 200]) {
+    if (bill >= total) options.add(bill);
+  }
+  return Array.from(options).sort((a, b) => a - b).slice(0, 6);
+}
 
 interface EntryFormProps {
   pricing: PricingConfig[];
@@ -73,18 +90,24 @@ function EntryForm({ pricing, userId, onSuccess }: EntryFormProps) {
       return;
     }
 
-    setPrintWarning(
-      `Entrada registrada. En Chrome: Márgenes → NINGUNO, Copias → 1, Papel 40×30 mm. (${getPrintDialogHint()})`
-    );
+    const isMonthly = await hasActiveMonthlyPlate(supabase, normalizedPlate);
 
-    const { printEntryLabel } = await import('@/lib/print-entry-label');
-    const printResult = await printEntryLabel({
-      plate: entry.plate,
-      entryAt: entry.entry_at,
-    });
+    if (!isMonthly) {
+      const { printEntryLabel } = await import('@/lib/print-entry-label');
+      const printResult = await printEntryLabel({
+        plate: entry.plate,
+        entryAt: entry.entry_at,
+      });
 
-    if (printResult === 'failed') {
-      setPrintWarning('Entrada registrada. No se pudo abrir la impresión de la etiqueta.');
+      if (printResult === 'direct') {
+        setPrintWarning('');
+      } else if (printResult === 'dialog') {
+        setPrintWarning('Impresión manual por Chrome (modo respaldo).');
+      } else {
+        setPrintWarning(
+          'Entrada registrada. No se pudo imprimir: verifica que npm run dev:all esté activo.'
+        );
+      }
     }
 
     setPlate('');
@@ -195,15 +218,50 @@ interface CheckoutModalProps {
 function CheckoutModal({ entry, pricing, userId, onClose, onSuccess }: CheckoutModalProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [received, setReceived] = useState('');
+  const [isMonthly, setIsMonthly] = useState(false);
+  const receivedRef = useRef<HTMLInputElement>(null);
   const supabase = createClient();
   const now = useNow(15_000);
 
-  const amount = calculateParkingAmount(
+  const hourlyAmount = calculateParkingAmount(
     entry.vehicle_type,
     new Date(entry.entry_at),
     now,
     pricing
   );
+  const amount = isMonthly ? 0 : hourlyAmount;
+
+  const receivedAmount = parseMoneyInput(received);
+  const change = receivedAmount - amount;
+  const quickAmounts = useMemo(() => getQuickCashAmounts(amount), [amount]);
+
+  useEffect(() => {
+    setReceived('');
+    setError('');
+    setIsMonthly(false);
+
+    async function checkMonthly() {
+      const today = formatInTimeZone(new Date(), APP_TIMEZONE, 'yyyy-MM-dd');
+      const { data } = await supabase
+        .from('monthly_parking')
+        .select('id')
+        .eq('status', 'active')
+        .ilike('plate', entry.plate)
+        .lte('period_start', today)
+        .gte('period_end', today)
+        .maybeSingle();
+      setIsMonthly(Boolean(data));
+    }
+
+    void checkMonthly();
+  }, [entry.id, entry.plate, supabase]);
+
+  useEffect(() => {
+    if (isMonthly) return;
+    const timer = window.setTimeout(() => receivedRef.current?.focus(), 150);
+    return () => window.clearTimeout(timer);
+  }, [entry.id, isMonthly]);
 
   async function handleCheckout() {
     setLoading(true);
@@ -253,10 +311,62 @@ function CheckoutModal({ entry, pricing, userId, onClose, onSuccess }: CheckoutM
             </span>
           </div>
           <div className="flex justify-between text-lg font-bold border-t pt-3">
-            <span>Total a cobrar</span>
-            <span className="text-green-600">{formatCurrency(amount)}</span>
+            <span>{isMonthly ? 'Cobro por horas' : 'Total a cobrar'}</span>
+            <span className={isMonthly ? 'text-blue-600' : 'text-green-600'}>
+              {isMonthly ? 'Plan mensual' : formatCurrency(amount)}
+            </span>
           </div>
+          {isMonthly && (
+            <p className="text-sm text-blue-700 bg-blue-50 border border-blue-100 rounded-lg p-3">
+              Esta placa tiene plan mensual vigente. No se cobra por horas.
+            </p>
+          )}
         </div>
+
+        {!isMonthly && (
+        <div className="mb-6 p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
+          <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+            <Banknote className="w-4 h-4 text-slate-500" />
+            Efectivo recibido
+          </label>
+          <input
+            ref={receivedRef}
+            type="number"
+            inputMode="decimal"
+            min="0"
+            step="0.01"
+            value={received}
+            onChange={(e) => setReceived(e.target.value)}
+            placeholder="0.00"
+            className="w-full px-4 py-3 text-lg font-semibold rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-green-500"
+          />
+          <div className="flex flex-wrap gap-2">
+            {quickAmounts.map((value) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setReceived(String(value))}
+                className="px-3 py-1.5 text-sm font-medium rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 transition-colors touch-manipulation"
+              >
+                {formatCurrency(value)}
+              </button>
+            ))}
+          </div>
+          {receivedAmount > 0 && change >= 0 && (
+            <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-center">
+              <p className="text-sm font-medium text-amber-800">Cambio a entregar</p>
+              <p className="text-3xl font-bold text-amber-900 mt-1">
+                {formatCurrency(change)}
+              </p>
+            </div>
+          )}
+          {receivedAmount > 0 && change < 0 && (
+            <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-center text-sm font-medium text-red-700">
+              Falta {formatCurrency(Math.abs(change))}
+            </div>
+          )}
+        </div>
+        )}
 
         {error && (
           <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">
@@ -277,7 +387,7 @@ function CheckoutModal({ entry, pricing, userId, onClose, onSuccess }: CheckoutM
             className="flex-1 py-3 sm:py-2.5 px-4 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2 touch-manipulation"
           >
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-            Cobrar {formatCurrency(amount)}
+            {isMonthly ? 'Registrar salida' : `Cobrar ${formatCurrency(amount)}`}
           </button>
         </div>
       </div>
@@ -438,7 +548,6 @@ function ActiveEntriesList({
 
 interface WorkerDashboardProps {
   userId: string;
-  userName: string;
   initialEntries: ParkingEntry[];
   pricing: PricingConfig[];
 }
@@ -455,14 +564,16 @@ export function WorkerDashboard({
   const supabase = createClient();
 
   async function handleReprintLabel(entry: ParkingEntry) {
-    setPrintWarning(getPrintDialogHint());
+    setPrintWarning('');
     const { printEntryLabel } = await import('@/lib/print-entry-label');
     const printResult = await printEntryLabel({
       plate: entry.plate,
       entryAt: entry.entry_at,
     });
     if (printResult === 'failed') {
-      setPrintWarning('No se pudo abrir la impresión de la etiqueta.');
+      setPrintWarning('No se pudo imprimir. Verifica que npm run dev:all esté activo.');
+    } else {
+      setPrintWarning('');
     }
   }
 
@@ -500,11 +611,6 @@ export function WorkerDashboard({
 
   return (
     <div className="space-y-6">
-      <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 text-blue-900 text-sm">
-        <strong>Etiqueta (1 sola):</strong> {getPrintDialogHint()}. Si sale un papel en blanco
-        extra, cambia <strong>Márgenes → Ninguno</strong> en el diálogo de Chrome.
-      </div>
-
       <EntryForm pricing={pricing} userId={userId} onSuccess={loadEntries} />
 
       <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6">

@@ -1,5 +1,6 @@
 export type UserRole = 'admin' | 'worker';
 export type ParkingStatus = 'active' | 'completed' | 'cancelled';
+export type MonthlyParkingStatus = 'active' | 'expired' | 'cancelled';
 export type PaymentMethod = 'cash' | 'card' | 'transfer';
 export type VehicleType = 'car' | 'motorcycle' | 'truck';
 
@@ -37,6 +38,22 @@ export interface ParkingEntry {
 export interface ParkingEntryWithWorker extends ParkingEntry {
   worker_entry?: Profile;
   worker_exit?: Profile;
+}
+
+export interface MonthlyParking {
+  id: string;
+  plate: string;
+  vehicle_type: VehicleType;
+  monthly_amount: number;
+  period_start: string;
+  period_end: string;
+  status: MonthlyParkingStatus;
+  customer_name: string | null;
+  notes: string | null;
+  worker_id: string;
+  paid_at: string | null;
+  payment_method: PaymentMethod | null;
+  created_at: string;
 }
 
 export interface ReportSummary {
