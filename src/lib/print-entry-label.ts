@@ -1,6 +1,6 @@
 import { formatBoliviaDate, formatBoliviaTime } from '@/lib/datetime';
 
-/** Etiqueta: 3 cm ancho × 4 cm alto (30 × 40 mm, vertical) */
+/** Etiqueta: 3 cm ancho × 4 cm alto (30 × 40 mm) */
 export const LABEL_WIDTH_MM = 30;
 export const LABEL_HEIGHT_MM = 40;
 
@@ -35,68 +35,81 @@ function buildLabelHtml(plate: string, date: string, time: string): string {
   <title>${plate}</title>
   <style>
     @page {
-      size: ${w}mm ${h}mm portrait;
+      size: ${w}mm ${h}mm;
       margin: 0;
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    html {
+    html, body {
       width: ${w}mm;
       height: ${h}mm;
+      max-width: ${w}mm;
+      max-height: ${h}mm;
+      overflow: hidden;
     }
     body {
-      width: ${w}mm;
-      height: ${h}mm;
-      overflow: hidden;
       font-family: Arial, Helvetica, sans-serif;
-      color: #000;
+      color: #111;
       background: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
     }
     .label {
-      width: ${w}mm;
-      height: ${h}mm;
-      padding: 2mm 1.5mm 1.5mm;
+      width: 26mm;
+      height: 34mm;
+      border: 0.25mm solid #222;
+      border-radius: 1.2mm;
+      padding: 2mm 1.5mm;
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: flex-start;
+      justify-content: space-between;
       text-align: center;
     }
-    .brand {
-      font-size: 5.5pt;
-      font-weight: bold;
-      line-height: 1.1;
+    .head {
       width: 100%;
-      overflow: hidden;
-      white-space: nowrap;
     }
-    .rule {
-      width: 85%;
-      border: none;
-      border-top: 1px solid #000;
-      margin: 1.2mm 0;
+    .kicker {
+      font-size: 4.5pt;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      color: #555;
+      line-height: 1.2;
+    }
+    .title {
+      font-size: 6.5pt;
+      font-weight: bold;
+      letter-spacing: 0.6px;
+      line-height: 1.2;
+      margin-top: 0.3mm;
+    }
+    .plate-wrap {
+      width: 100%;
+      border-top: 0.2mm solid #000;
+      border-bottom: 0.2mm solid #000;
+      padding: 1.8mm 0;
     }
     .plate {
-      font-size: 10pt;
-      font-weight: bold;
+      font-size: 11pt;
+      font-weight: 800;
+      letter-spacing: 0.8px;
       line-height: 1;
-      letter-spacing: 0;
-      width: 100%;
-      overflow: hidden;
       word-break: break-all;
-      padding: 0.5mm 0;
     }
-    .when {
-      font-size: 6pt;
-      line-height: 1.2;
+    .foot {
       width: 100%;
-      overflow: hidden;
-      white-space: nowrap;
+      line-height: 1.25;
+    }
+    .date {
+      font-size: 5.5pt;
+      color: #333;
     }
     .time {
       font-size: 8pt;
       font-weight: bold;
-      line-height: 1.1;
-      margin-top: 0.5mm;
+      margin-top: 0.4mm;
     }
     @media print {
       html, body {
@@ -104,9 +117,10 @@ function buildLabelHtml(plate: string, date: string, time: string): string {
         height: ${h}mm !important;
         max-height: ${h}mm !important;
         overflow: hidden !important;
+        page-break-before: avoid;
+        page-break-after: avoid;
       }
       .label {
-        page-break-after: avoid;
         page-break-inside: avoid;
       }
     }
@@ -114,12 +128,17 @@ function buildLabelHtml(plate: string, date: string, time: string): string {
 </head>
 <body>
   <div class="label">
-    <div class="brand">PARQUEO</div>
-    <hr class="rule">
-    <div class="plate">${plate}</div>
-    <hr class="rule">
-    <div class="when">${date}</div>
-    <div class="time">${time}</div>
+    <div class="head">
+      <div class="kicker">Entrada</div>
+      <div class="title">PARQUEO</div>
+    </div>
+    <div class="plate-wrap">
+      <div class="plate">${plate}</div>
+    </div>
+    <div class="foot">
+      <div class="date">${date}</div>
+      <div class="time">${time}</div>
+    </div>
   </div>
 </body>
 </html>`;
@@ -166,11 +185,14 @@ function printWithDialog(data: EntryLabelData): boolean {
   frameDoc.write(html);
   frameDoc.close();
 
+  let printed = false;
   const cleanup = () => {
     iframe.remove();
   };
 
   const triggerPrint = () => {
+    if (printed) return;
+    printed = true;
     setTimeout(() => {
       try {
         frameWindow.focus();
@@ -179,15 +201,11 @@ function printWithDialog(data: EntryLabelData): boolean {
         cleanup();
         return;
       }
-      setTimeout(cleanup, 1500);
-    }, 250);
+      setTimeout(cleanup, 2000);
+    }, 300);
   };
 
-  if (frameDoc.readyState === 'complete') {
-    triggerPrint();
-  } else {
-    iframe.onload = triggerPrint;
-  }
+  iframe.onload = triggerPrint;
 
   return true;
 }
@@ -203,5 +221,5 @@ export async function printEntryLabel(data: EntryLabelData): Promise<PrintResult
 }
 
 export function getPrintDialogHint(): string {
-  return 'Papel: 30×40 mm (vertical). Márgenes: Ninguno. Sin encabezados.';
+  return 'Papel 30×40 mm · Márgenes: Ninguno · Copias: 1 · Sin encabezados.';
 }
