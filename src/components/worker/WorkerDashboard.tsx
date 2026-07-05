@@ -9,6 +9,7 @@ import {
   getPricingForVehicle,
 } from '@/lib/pricing';
 import { formatBoliviaTime } from '@/lib/datetime';
+import { getPrintDialogHint } from '@/lib/print-entry-label';
 import { useNow } from '@/hooks/useNow';
 import type {
   ParkingEntry,
@@ -71,6 +72,10 @@ function EntryForm({ pricing, userId, onSuccess }: EntryFormProps) {
       setLoading(false);
       return;
     }
+
+    setPrintWarning(
+      `Entrada registrada. En Chrome: Márgenes → NINGUNO, Copias → 1, Papel 40×30 mm. (${getPrintDialogHint()})`
+    );
 
     const { printEntryLabel } = await import('@/lib/print-entry-label');
     const printResult = await printEntryLabel({
@@ -450,7 +455,7 @@ export function WorkerDashboard({
   const supabase = createClient();
 
   async function handleReprintLabel(entry: ParkingEntry) {
-    setPrintWarning('');
+    setPrintWarning(getPrintDialogHint());
     const { printEntryLabel } = await import('@/lib/print-entry-label');
     const printResult = await printEntryLabel({
       plate: entry.plate,
@@ -495,6 +500,11 @@ export function WorkerDashboard({
 
   return (
     <div className="space-y-6">
+      <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 text-blue-900 text-sm">
+        <strong>Etiqueta (1 sola):</strong> {getPrintDialogHint()}. Si sale un papel en blanco
+        extra, cambia <strong>Márgenes → Ninguno</strong> en el diálogo de Chrome.
+      </div>
+
       <EntryForm pricing={pricing} userId={userId} onSuccess={loadEntries} />
 
       <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6">
