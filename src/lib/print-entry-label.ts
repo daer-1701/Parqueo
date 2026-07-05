@@ -1,13 +1,12 @@
 import { formatBoliviaDate, formatBoliviaTime } from '@/lib/datetime';
 
-/** Etiqueta térmica: 3 cm × 4 cm (30 × 40 mm) */
+/** Etiqueta: 3 cm ancho × 4 cm alto (30 × 40 mm, vertical) */
 export const LABEL_WIDTH_MM = 30;
 export const LABEL_HEIGHT_MM = 40;
 
 const PRINT_SERVER_URL =
   process.env.NEXT_PUBLIC_PRINT_SERVER_URL?.trim() || 'http://127.0.0.1:3847';
 
-/** Solo intenta impresión directa si está en true (opcional) */
 const PRINT_DIRECT = process.env.NEXT_PUBLIC_PRINT_DIRECT === 'true';
 
 export interface EntryLabelData {
@@ -26,88 +25,102 @@ function escapeHtml(text: string): string {
 }
 
 function buildLabelHtml(plate: string, date: string, time: string): string {
+  const w = LABEL_WIDTH_MM;
+  const h = LABEL_HEIGHT_MM;
+
   return `<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="utf-8">
-  <title>Etiqueta ${plate}</title>
+  <title>${plate}</title>
   <style>
     @page {
-      size: ${LABEL_WIDTH_MM}mm ${LABEL_HEIGHT_MM}mm;
+      size: ${w}mm ${h}mm portrait;
       margin: 0;
     }
-    html, body {
-      width: ${LABEL_WIDTH_MM}mm;
-      height: ${LABEL_HEIGHT_MM}mm;
-      max-width: ${LABEL_WIDTH_MM}mm;
-      max-height: ${LABEL_HEIGHT_MM}mm;
-      overflow: hidden;
-    }
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html {
+      width: ${w}mm;
+      height: ${h}mm;
     }
     body {
+      width: ${w}mm;
+      height: ${h}mm;
+      overflow: hidden;
       font-family: Arial, Helvetica, sans-serif;
       color: #000;
       background: #fff;
-      padding: 1.5mm 1mm;
+    }
+    .label {
+      width: ${w}mm;
+      height: ${h}mm;
+      padding: 2mm 1.5mm 1.5mm;
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
-      gap: 1mm;
+      justify-content: flex-start;
       text-align: center;
     }
-    .title {
-      font-size: 6.5pt;
+    .brand {
+      font-size: 5.5pt;
       font-weight: bold;
-      letter-spacing: 0.2px;
       line-height: 1.1;
       width: 100%;
+      overflow: hidden;
+      white-space: nowrap;
     }
-    .divider {
-      border-top: 1px dashed #000;
-      width: 92%;
+    .rule {
+      width: 85%;
+      border: none;
+      border-top: 1px solid #000;
+      margin: 1.2mm 0;
     }
     .plate {
-      font-size: 12pt;
+      font-size: 10pt;
       font-weight: bold;
-      letter-spacing: 0.5px;
       line-height: 1;
-      word-break: break-all;
+      letter-spacing: 0;
       width: 100%;
+      overflow: hidden;
+      word-break: break-all;
       padding: 0.5mm 0;
     }
-    .date {
-      font-size: 7pt;
-      line-height: 1.1;
+    .when {
+      font-size: 6pt;
+      line-height: 1.2;
+      width: 100%;
+      overflow: hidden;
+      white-space: nowrap;
     }
     .time {
-      font-size: 9pt;
+      font-size: 8pt;
       font-weight: bold;
       line-height: 1.1;
+      margin-top: 0.5mm;
     }
     @media print {
       html, body {
-        width: ${LABEL_WIDTH_MM}mm !important;
-        height: ${LABEL_HEIGHT_MM}mm !important;
+        width: ${w}mm !important;
+        height: ${h}mm !important;
+        max-height: ${h}mm !important;
+        overflow: hidden !important;
       }
-      body {
-        -webkit-print-color-adjust: exact;
-        print-color-adjust: exact;
+      .label {
+        page-break-after: avoid;
+        page-break-inside: avoid;
       }
     }
   </style>
 </head>
 <body>
-  <div class="title">ENTRADA — PARQUEO</div>
-  <div class="divider"></div>
-  <div class="plate">${plate}</div>
-  <div class="divider"></div>
-  <div class="date">${date}</div>
-  <div class="time">${time}</div>
+  <div class="label">
+    <div class="brand">PARQUEO</div>
+    <hr class="rule">
+    <div class="plate">${plate}</div>
+    <hr class="rule">
+    <div class="when">${date}</div>
+    <div class="time">${time}</div>
+  </div>
 </body>
 </html>`;
 }
@@ -179,11 +192,6 @@ function printWithDialog(data: EntryLabelData): boolean {
   return true;
 }
 
-/**
- * Imprime etiqueta 3×4 cm (30×40 mm).
- * Por defecto abre el diálogo del navegador (impresora LABEL).
- * Impresión directa solo si NEXT_PUBLIC_PRINT_DIRECT=true.
- */
 export async function printEntryLabel(data: EntryLabelData): Promise<PrintResult> {
   if (PRINT_DIRECT) {
     const direct = await printDirect(data);
@@ -195,5 +203,5 @@ export async function printEntryLabel(data: EntryLabelData): Promise<PrintResult
 }
 
 export function getPrintDialogHint(): string {
-  return 'En Imprimir: elige LABEL, desactiva encabezados y usa papel 30×40 mm.';
+  return 'Papel: 30×40 mm (vertical). Márgenes: Ninguno. Sin encabezados.';
 }
