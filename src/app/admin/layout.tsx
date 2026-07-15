@@ -1,5 +1,6 @@
 import { AdminNav } from '@/components/admin/AdminNav';
 import { Navbar } from '@/components/Navbar';
+import { RequireFreshLogin } from '@/components/RequireFreshLogin';
 import { getDashboardPath } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
@@ -27,17 +28,19 @@ export default async function AdminLayout({
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <Navbar
-        title="Panel de Administración"
-        shortTitle="Admin"
-        userName={profile.full_name}
-        role="Administrador"
-      />
-      <main className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8 pb-safe">
-        <AdminNav />
-        {children}
-      </main>
-    </div>
+    <RequireFreshLogin>
+      <div className="min-h-screen bg-slate-50">
+        <Navbar
+          title="Panel de Administración"
+          shortTitle="Admin"
+          userName={profile.full_name}
+          role="Administrador"
+        />
+        <main className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8 pb-safe">
+          <AdminNav />
+          {children}
+        </main>
+      </div>
+    </RequireFreshLogin>
   );
 }

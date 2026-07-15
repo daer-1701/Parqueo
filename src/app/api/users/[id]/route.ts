@@ -8,6 +8,7 @@ interface RouteContext {
 
 interface UpdateUserBody {
   full_name?: string;
+  email?: string;
   role?: UserRole;
   password?: string;
 }
@@ -27,7 +28,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     return NextResponse.json({ error: 'JSON inválido' }, { status: 400 });
   }
 
-  const { full_name, role, password } = body;
+  const { full_name, email, role, password } = body;
 
   if (id === auth.user.id && role && role !== 'admin') {
     return NextResponse.json(
@@ -36,10 +37,24 @@ export async function PATCH(request: Request, context: RouteContext) {
     );
   }
 
+  if (role && role !== 'admin' && role !== 'worker') {
+    return NextResponse.json({ error: 'Rol inválido' }, { status: 400 });
+  }
+
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+    return NextResponse.json({ error: 'Correo inválido' }, { status: 400 });
+  }
+
   try {
     const admin = createAdminClient();
 
-    const authUpdates: { user_metadata?: Record<string, string>; password?: string } = {};
+    const authUpdates: {
+      email?: string;
+      user_metadata?: Record<string, string>;
+      password?: string;
+    } = {};
+
+    if (email?.trim()) authUpdates.email = email.trim().toLowerCase();
     if (full_name?.trim()) authUpdates.user_metadata = { full_name: full_name.trim() };
     if (role) authUpdates.user_metadata = { ...authUpdates.user_metadata, role };
     if (password) {

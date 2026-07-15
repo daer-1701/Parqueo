@@ -22,6 +22,7 @@ import { buildLabelTsplAuto } from './build-label-tspl.mjs';
 import { sendToComPort } from './com-print.mjs';
 import { detectTomateComPort } from './detect-com-port.mjs';
 import { sendRawToPrinter } from './win-raw-print.mjs';
+import { sendGdiToPrinter } from './win-gdi-print.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PRINT_SERVER_PORT ?? 3847);
@@ -69,17 +70,39 @@ function formatBoliviaTime(iso) {
   }).format(new Date(iso));
 }
 
-function buildPrintBuffer({ plate, date, time }) {
-  if (PRINT_MODE === 'escpos') {
-    return buildLabelEscPos({ plate, date, time });
-  }
-  return buildLabelTsplAuto({ plate, date, time });
+const VEHICLE_LABELS = {
+  car: 'AUTOMOVIL',
+  motorcycle: 'MOTOCICLETA',
+  truck: 'CAMIONETA',
+};
+
+function vehicleLabelOf(vehicleType) {
+  if (!vehicleType) return '';
+  return VEHICLE_LABELS[vehicleType] ?? String(vehicleType);
 }
 
-async function printLabel({ plate, entryAt }) {
+function buildPrintBuffer({ plate, date, time, vehicleLabel }) {
+  if (PRINT_MODE === 'escpos') {
+    return buildLabelEscPos({ plate, date, time, vehicleLabel });
+  }
+  return buildLabelTsplAuto({ plate, date, time, vehicleLabel });
+}
+
+async function printLabel({ plate, entryAt, vehicleType }) {
   const date = formatBoliviaDate(entryAt);
   const time = formatBoliviaTime(entryAt);
-  const buffer = buildPrintBuffer({ plate, date, time });
+  const vehicleLabel = vehicleLabelOf(vehicleType);
+
+  // GDI: el driver LABEL dibuja la etiqueta (mismo camino que el diálogo de Windows).
+  if (PRINT_MODE === 'gdi') {
+    if (!PRINTER_NAME) {
+      throw new Error('PRINT_MODE=gdi requiere PRINTER_NAME=LABEL en .env.local');
+    }
+    await sendGdiToPrinter(PRINTER_NAME, { plate, date, time, vehicle: vehicleLabel });
+    return;
+  }
+
+  const buffer = buildPrintBuffer({ plate, date, time, vehicleLabel });
 
   if (PRINT_VIA === 'com' && PRINT_COM_PORT) {
     await sendToComPort(PRINT_COM_PORT, PRINT_BAUD_RATE, buffer);
@@ -97,7 +120,7 @@ async function printLabel({ plate, entryAt }) {
   }
 
   throw new Error(
-    'Configura PRINTER_NAME=LABEL (driver oficial) o PRINT_COM_PORT=COM8 en .env.local'
+    'Configura PRINTER_NAME=LABEL y PRINT_MODE=gdi (o tspl) en .env.local'
   );
 }
 
@@ -170,6 +193,7 @@ const server = http.createServer(async (req, res) => {
       await printLabel({
         plate: String(body.plate).trim().toUpperCase(),
         entryAt: body.entryAt,
+        vehicleType: body.vehicleType ? String(body.vehicleType).trim() : undefined,
       });
 
       sendJson(res, 200, { ok: true }, req);
@@ -194,7 +218,7 @@ server.listen(PORT, '127.0.0.1', () => {
     console.log('   ⚠️  Agrega en .env.local:');
     console.log('      PRINTER_NAME=LABEL');
     console.log('      PRINT_VIA=windows');
-    console.log('      PRINT_MODE=tspl');
+    console.log('      PRINT_MODE=gdi');
   }
   console.log('   Deja esta ventana abierta mientras usas el panel de operador.\n');
 });

@@ -14,8 +14,8 @@ import {
   totalSubscriptionAmount,
 } from '@/lib/monthly-parking';
 import { formatCurrency } from '@/lib/pricing';
-import type { MonthlyParking, VehicleType } from '@/types/database';
-import { VEHICLE_LABELS } from '@/types/database';
+import type { MonthlyParking, PricingConfig, VehicleType } from '@/types/database';
+import { MONTHLY_VEHICLE_LABELS, MONTHLY_VEHICLE_TYPES } from '@/types/database';
 import {
   Banknote,
   CalendarDays,
@@ -32,6 +32,7 @@ const DURATION_OPTIONS = [1, 2, 3, 4, 5, 6, 12];
 interface MonthlyParkingDashboardProps {
   userId: string;
   initialSubscriptions: MonthlyParking[];
+  monthlyRates: Pick<PricingConfig, 'vehicle_type' | 'monthly_rate'>[];
 }
 
 function parseMoneyInput(value: string): number {
@@ -181,15 +182,27 @@ function PayModal({ subscription, onClose, onPaid }: PayModalProps) {
 export function MonthlyParkingDashboard({
   userId,
   initialSubscriptions,
+  monthlyRates,
 }: MonthlyParkingDashboardProps) {
+  const rateMap = useMemo(() => {
+    const map = new Map<VehicleType, number>();
+    for (const row of monthlyRates) {
+      map.set(row.vehicle_type, Number(row.monthly_rate ?? 0));
+    }
+    return map;
+  }, [monthlyRates]);
+
+  const defaultType: VehicleType = 'car';
   const [subscriptions, setSubscriptions] = useState(initialSubscriptions);
   const [search, setSearch] = useState('');
   const [startDate, setStartDate] = useState(todayDateString());
   const [durationMonths, setDurationMonths] = useState(1);
   const [plate, setPlate] = useState('');
-  const [vehicleType, setVehicleType] = useState<VehicleType>('car');
+  const [vehicleType, setVehicleType] = useState<VehicleType>(defaultType);
   const [customerName, setCustomerName] = useState('');
-  const [monthlyAmount, setMonthlyAmount] = useState('');
+  const [monthlyAmount, setMonthlyAmount] = useState(
+    String(rateMap.get(defaultType) ?? '')
+  );
   const [notes, setNotes] = useState('');
   const [received, setReceived] = useState('');
   const [loading, setLoading] = useState(false);
@@ -197,6 +210,12 @@ export function MonthlyParkingDashboard({
   const [success, setSuccess] = useState('');
   const [payTarget, setPayTarget] = useState<MonthlyParking | null>(null);
   const supabase = createClient();
+
+  function handleVehicleTypeChange(type: VehicleType) {
+    setVehicleType(type);
+    const rate = rateMap.get(type);
+    setMonthlyAmount(rate !== undefined && rate > 0 ? String(rate) : '');
+  }
 
   const periodPreview = useMemo(
     () => calculateSubscriptionPeriod(startDate, durationMonths),
@@ -265,7 +284,7 @@ export function MonthlyParkingDashboard({
     }
 
     if (amount <= 0) {
-      setError('Ingresa el precio mensual');
+      setError('El admin aún no definió precio para este tipo de vehículo');
       setLoading(false);
       return;
     }
@@ -316,7 +335,7 @@ export function MonthlyParkingDashboard({
 
     setPlate('');
     setCustomerName('');
-    setMonthlyAmount('');
+    setMonthlyAmount(String(rateMap.get(vehicleType) ?? ''));
     setNotes('');
     setReceived('');
     setSuccess(
@@ -377,19 +396,38 @@ export function MonthlyParkingDashboard({
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1.5">
-              Precio mensual (Bs) *
+              Tipo de vehículo *
+            </label>
+            <select
+              value={vehicleType}
+              onChange={(e) => handleVehicleTypeChange(e.target.value as VehicleType)}
+              className="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              {MONTHLY_VEHICLE_TYPES.map((key) => (
+                <option key={key} value={key}>
+                  {MONTHLY_VEHICLE_LABELS[key]}
+                  {rateMap.has(key) ? ` — ${formatCurrency(rateMap.get(key)!)}/mes` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">
+              Precio mensual (Bs)
             </label>
             <input
-              type="number"
-              inputMode="decimal"
-              min="0"
-              step="0.01"
-              value={monthlyAmount}
-              onChange={(e) => setMonthlyAmount(e.target.value)}
-              required
-              placeholder="Ej. 350"
-              className="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              type="text"
+              value={
+                parseMoneyInput(monthlyAmount) > 0
+                  ? formatCurrency(parseMoneyInput(monthlyAmount))
+                  : 'Sin tarifa'
+              }
+              readOnly
+              className="w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-700 font-semibold"
             />
+            <p className="text-xs text-slate-500 mt-1">
+              Definido por el administrador en Tarifas
+            </p>
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1.5">
@@ -415,20 +453,6 @@ export function MonthlyParkingDashboard({
               {DURATION_OPTIONS.map((n) => (
                 <option key={n} value={n}>
                   {formatDurationLabel(n)}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">Vehículo</label>
-            <select
-              value={vehicleType}
-              onChange={(e) => setVehicleType(e.target.value as VehicleType)}
-              className="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              {Object.entries(VEHICLE_LABELS).map(([key, label]) => (
-                <option key={key} value={key}>
-                  {label}
                 </option>
               ))}
             </select>
@@ -568,7 +592,7 @@ export function MonthlyParkingDashboard({
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-mono font-bold text-slate-900">{sub.plate}</span>
                       <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
-                        {VEHICLE_LABELS[sub.vehicle_type]}
+                        {MONTHLY_VEHICLE_LABELS[sub.vehicle_type] ?? sub.vehicle_type}
                       </span>
                       {current && (
                         <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">

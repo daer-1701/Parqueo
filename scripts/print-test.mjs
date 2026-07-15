@@ -10,6 +10,7 @@ import { buildLabelEscPos } from './build-label-escpos.mjs';
 import { buildLabelTsplAuto } from './build-label-tspl.mjs';
 import { sendToComPort } from './com-print.mjs';
 import { sendRawToPrinter } from './win-raw-print.mjs';
+import { sendGdiToPrinter } from './win-gdi-print.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -32,14 +33,14 @@ loadEnv();
 const comPort = process.env.PRINT_COM_PORT?.trim();
 const baudRate = Number(process.env.PRINT_BAUD_RATE ?? 9600);
 const printerName = process.env.PRINTER_NAME?.trim();
-const mode = (process.env.PRINT_MODE ?? 'tspl').trim().toLowerCase();
+const mode = (process.env.PRINT_MODE ?? 'gdi').trim().toLowerCase();
 const via = (process.env.PRINT_VIA ?? (printerName ? 'windows' : 'com')).trim().toLowerCase();
 
-if (via === 'com' && !comPort) {
+if (mode !== 'gdi' && via === 'com' && !comPort) {
   console.error('Falta PRINT_COM_PORT en .env.local');
   process.exit(1);
 }
-if (via === 'windows' && !printerName) {
+if ((mode === 'gdi' || via === 'windows') && !printerName) {
   console.error('Falta PRINTER_NAME en .env.local');
   process.exit(1);
 }
@@ -58,17 +59,29 @@ const time = new Intl.DateTimeFormat('es-BO', {
   hour12: false,
 }).format(now);
 
-const buffer =
-  mode === 'escpos'
-    ? buildLabelEscPos({ plate: 'PRUEBA01', date, time })
-    : buildLabelTsplAuto({ plate: 'PRUEBA01', date, time });
+const vehicle = process.env.PRINT_TEST_VEHICLE?.trim() || 'Motocicleta';
 
-if (via === 'com') {
-  console.log(`Imprimiendo por ${comPort} @ ${baudRate} (${mode.toUpperCase()})`);
-  await sendToComPort(comPort, baudRate, buffer);
+if (mode === 'gdi') {
+  console.log(`Imprimiendo GDI en: ${printerName} (${vehicle})`);
+  await sendGdiToPrinter(printerName, {
+    plate: 'PRUEBA01',
+    date,
+    time,
+    vehicle,
+  });
 } else {
-  console.log(`Imprimiendo en: ${printerName} (${mode.toUpperCase()})`);
-  await sendRawToPrinter(printerName, buffer);
+  const buffer =
+    mode === 'escpos'
+      ? buildLabelEscPos({ plate: 'PRUEBA01', date, time, vehicleLabel: vehicle })
+      : buildLabelTsplAuto({ plate: 'PRUEBA01', date, time, vehicleLabel: vehicle });
+
+  if (via === 'com') {
+    console.log(`Imprimiendo por ${comPort} @ ${baudRate} (${mode.toUpperCase()})`);
+    await sendToComPort(comPort, baudRate, buffer);
+  } else {
+    console.log(`Imprimiendo en: ${printerName} (${mode.toUpperCase()})`);
+    await sendRawToPrinter(printerName, buffer);
+  }
 }
 
 console.log('Etiqueta enviada. Revisa la impresora.');

@@ -1,4 +1,3 @@
-import { getDashboardPath } from '@/lib/auth';
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 import { assertSupabaseEnv } from './env';
@@ -58,7 +57,7 @@ export async function updateSession(request: NextRequest) {
       await supabase.auth.signOut();
     }
 
-    if (path.startsWith('/login') || path.startsWith('/api')) {
+    if (path.startsWith('/login') || path.startsWith('/auth') || path.startsWith('/api')) {
       return supabaseResponse;
     }
 
@@ -67,25 +66,30 @@ export async function updateSession(request: NextRequest) {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role')
+    .select('role, is_locked')
     .eq('id', user.id)
     .single();
 
-  const role = profile?.role;
-  const dashboard = getDashboardPath(role);
-
-  if (path === '/' || path === '/login') {
-    if (dashboard === '/login') {
-      await supabase.auth.signOut();
-      return redirectToLogin(request, supabaseResponse);
-    }
-
+  if (profile?.is_locked && !path.startsWith('/login') && !path.startsWith('/auth')) {
+    await supabase.auth.signOut();
     const redirectUrl = request.nextUrl.clone();
-    redirectUrl.pathname = dashboard;
+    redirectUrl.pathname = '/login';
+    redirectUrl.searchParams.set('locked', '1');
     return withSupabaseCookies(
       supabaseResponse,
       NextResponse.redirect(redirectUrl)
     );
+  }
+
+  const role = profile?.role;
+
+  if (path.startsWith('/auth')) {
+    return supabaseResponse;
+  }
+
+  // Siempre iniciar en login; no saltar al panel por sesión guardada
+  if (path === '/' || path === '/login') {
+    return supabaseResponse;
   }
 
   if (path.startsWith('/admin') && role !== 'admin') {

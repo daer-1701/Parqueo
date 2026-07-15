@@ -1,39 +1,46 @@
 /**
- * Inserta ~70 entradas de prueba en parking_entries.
+ * Llena la base con datos de demostración completos.
+ * Tablas: pricing_config, parking_entries, monthly_parking, worker_deposits
+ * NO toca usuarios / profiles.
+ *
+ * Placas formato boliviano: 4578RBS (4 dígitos + 3 letras)
+ * Solo autos y motos.
  *
  * Uso:
  *   npm run seed:data
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { addDays, addMonths, endOfWeek, startOfWeek, subDays } from 'date-fns';
+import { formatInTimeZone, fromZonedTime, toZonedTime } from 'date-fns-tz';
 import { readFileSync, existsSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const SEED_NOTE = 'seed-demo';
-const TOTAL_ENTRIES = 70;
-const ACTIVE_COUNT = 5;
+const TZ = 'America/La_Paz';
+const SEED_NOTE = 'seed-demo-v2';
 
-const VEHICLE_TYPES = ['car', 'car', 'car', 'motorcycle', 'motorcycle', 'truck'];
-const PAYMENT_METHODS = ['cash', 'cash', 'cash', 'card', 'card', 'transfer'];
-const DURATION_MINUTES = [8, 12, 25, 35, 48, 55, 62, 68, 75, 82, 95, 110, 125, 140, 165, 190, 220, 260, 300];
+const TOTAL_HOURLY = 650;
+const ACTIVE_HOURLY = 12;
+const CANCELLED_HOURLY = 8;
+const TOTAL_MONTHLY = 55;
+const ACTIVE_MONTHLY = 18;
+const DEPOSIT_WEEKS = 10;
 
-const PLATE_PREFIXES = [
-  '1234ABC', '5678DEF', '9012GHI', '3456JKL', '7890MNO',
-  '2345PQR', '6789STU', '1357VWX', '2468YZA', '3691BCD',
-  '4826EFG', '5937HIJ', '6048KLM', '7159NOP', '8260QRS',
-  '3784RBG', '4521LPT', '8890SCZ', '1122AAX', '3344BBY',
-  '5566CCZ', '7788DDA', '9900EEB', '1212FFC', '3434GGD',
-  '5656HHE', '7878IIF', '9090JJG', '1313KKH', '3535LLI',
-  '5757MMJ', '7979NNA', '9191OOB', '1414PPA', '3636QQB',
-  '5858RRC', '8080SSD', '0202TTE', '2424UUF', '4646VVG',
-  '6868WWH', '9091XXI', '1213YYJ', '3435ZZK', '5658AAL',
-  '7880BBM', '9102CCN', '1324DDO', '3546EEP', '5768FFQ',
-  '7990GGR', '9112HHS', '1334IIT', '3556JJS', '5778KKT',
-  '8000LLU', '9222MMV', '1444NNW', '3666OOX', '5888PPY',
-  '8110QQZ', '9332RRA', '1554SSB', '3776TTC', '5998UUD',
-  '8220VVE', '9442WWF', '1664XXG', '3886YYH', '5008ZZI',
+const CUSTOMER_NAMES = [
+  'Carlos Mendoza', 'María López', 'Juan Pérez', 'Ana Torres', 'Luis Vargas',
+  'Rosa Quispe', 'Pedro Mamani', 'Elena Flores', 'Miguel Rojas', 'Sofía Cruz',
+  'Diego Aguilar', 'Carmen Vega', 'Fernando Soto', 'Patricia Núñez', 'Ricardo Paz',
+  'Gabriela Ríos', 'Héctor Salazar', 'Lucía Morales', 'Oscar Campos', 'Valeria Ortiz',
+  'Jorge Herrera', 'Daniela Peña', 'Andrés Guzmán', 'Claudia Reyes', 'Roberto Silva',
+  'Natalia Fuentes', 'Eduardo Castro', 'Mónica Delgado', 'Sergio Romero', 'Laura Jiménez',
+];
+
+const VEHICLE_TYPES = ['car', 'car', 'car', 'car', 'motorcycle', 'motorcycle'];
+const DURATION_MINUTES = [
+  5, 8, 12, 18, 22, 28, 35, 42, 48, 55, 62, 68, 75, 82, 90, 95, 105, 115, 125,
+  135, 150, 165, 180, 200, 220, 240, 270, 300, 360, 420, 480,
 ];
 
 function loadEnv() {
@@ -42,8 +49,7 @@ function loadEnv() {
     console.error('❌ No se encontró .env.local');
     process.exit(1);
   }
-  const content = readFileSync(envPath, 'utf-8');
-  for (const line of content.split('\n')) {
+  for (const line of readFileSync(envPath, 'utf-8').split('\n')) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith('#')) continue;
     const eq = trimmed.indexOf('=');
@@ -54,43 +60,71 @@ function loadEnv() {
   }
 }
 
-function calculateAmount(minutes, pricing) {
-  const { first_hour_rate, extra_hour_rate, grace_minutes } = pricing;
-
-  if (minutes <= 0) return 0;
-  if (minutes <= 60) return first_hour_rate;
-
-  const billableExtraMinutes = minutes - 60 - grace_minutes;
-  if (billableExtraMinutes <= 0) return first_hour_rate;
-
-  const extraHours = Math.ceil(billableExtraMinutes / 60);
-  return first_hour_rate + extraHours * extra_hour_rate;
-}
-
 function randomItem(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-function addMinutes(date, minutes) {
-  return new Date(date.getTime() + minutes * 60 * 1000);
+function randomBetween(min, max) {
+  return min + Math.floor(Math.random() * (max - min + 1));
 }
 
-function addDays(date, days) {
-  const d = new Date(date);
-  d.setDate(d.getDate() - days);
-  return d;
+/** Placa boliviana: 4578RBS */
+function generatePlate(index) {
+  const digits = String(1000 + ((index * 137 + 421) % 9000));
+  const alpha = 'ABCDEFGHJKLMNPRSTUVWXYZ';
+  const a = alpha[index % alpha.length];
+  const b = alpha[(index * 3 + 5) % alpha.length];
+  const c = alpha[(index * 7 + 11) % alpha.length];
+  return `${digits}${a}${b}${c}`;
 }
 
-function randomHourOffset() {
-  const hour = 7 + Math.floor(Math.random() * 14);
-  const minute = Math.floor(Math.random() * 60);
-  return { hour, minute };
+function calculateAmount(minutes, pricing) {
+  const { first_hour_rate, extra_hour_rate, grace_minutes } = pricing;
+  if (minutes <= 0) return 0;
+  if (minutes <= 60) return Number(first_hour_rate);
+  const billableExtraMinutes = minutes - 60 - grace_minutes;
+  if (billableExtraMinutes <= 0) return Number(first_hour_rate);
+  const extraHours = Math.ceil(billableExtraMinutes / 60);
+  return Number(first_hour_rate) + extraHours * Number(extra_hour_rate);
 }
 
-function setBoliviaTime(date, hour, minute) {
-  const d = new Date(date);
-  d.setHours(hour, minute, 0, 0);
-  return d;
+function pad2(n) {
+  return String(n).padStart(2, '0');
+}
+
+function boliviaDate(daysAgo, hour, minute) {
+  const today = formatInTimeZone(new Date(), TZ, 'yyyy-MM-dd');
+  const zoned = fromZonedTime(`${today}T${pad2(hour)}:${pad2(minute)}:00`, TZ);
+  return addDays(zoned, -daysAgo);
+}
+
+function countPeriodMonths(periodStart, periodEnd) {
+  const start = new Date(`${periodStart}T12:00:00`);
+  const end = addDays(new Date(`${periodEnd}T12:00:00`), 1);
+  const months =
+    (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth());
+  return Math.max(1, months);
+}
+
+function subscriptionPeriod(startDate, months) {
+  const start = fromZonedTime(`${startDate}T12:00:00`, TZ);
+  const end = subDays(addMonths(start, months), 1);
+  return {
+    period_start: formatInTimeZone(start, TZ, 'yyyy-MM-dd'),
+    period_end: formatInTimeZone(end, TZ, 'yyyy-MM-dd'),
+  };
+}
+
+function getWeekBounds(date) {
+  const zoned = toZonedTime(date, TZ);
+  const weekStartLocal = startOfWeek(zoned, { weekStartsOn: 1 });
+  const weekEndLocal = endOfWeek(zoned, { weekStartsOn: 1 });
+  const start = fromZonedTime(weekStartLocal, TZ);
+  const end = fromZonedTime(weekEndLocal, TZ);
+  return {
+    weekStart: formatInTimeZone(start, TZ, 'yyyy-MM-dd'),
+    weekEnd: formatInTimeZone(end, TZ, 'yyyy-MM-dd'),
+  };
 }
 
 loadEnv();
@@ -101,7 +135,7 @@ const serviceKey = (
 )?.trim();
 
 if (!url || !serviceKey) {
-  console.error('❌ Faltan NEXT_PUBLIC_SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY en .env.local');
+  console.error('❌ Faltan NEXT_PUBLIC_SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY');
   process.exit(1);
 }
 
@@ -109,99 +143,283 @@ const supabase = createClient(url, serviceKey, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
 
+async function insertBatches(table, rows, batchSize = 80) {
+  for (let i = 0; i < rows.length; i += batchSize) {
+    const batch = rows.slice(i, i + batchSize);
+    const { error } = await supabase.from(table).insert(batch);
+    if (error) throw new Error(`${table}: ${error.message}`);
+  }
+}
+
 async function main() {
+  console.log('🔍 Buscando operadores...');
   const { data: workers, error: workerError } = await supabase
     .from('profiles')
-    .select('id')
-    .eq('role', 'worker')
-    .limit(1);
+    .select('id, full_name')
+    .eq('role', 'worker');
 
   if (workerError || !workers?.length) {
-    console.error('❌ No hay operador (worker). Ejecuta primero: npm run setup:users');
+    console.error('❌ No hay operadores. Ejecuta primero: npm run setup:users');
     process.exit(1);
   }
 
-  const workerId = workers[0].id;
+  console.log(`   ${workers.length} operador(es) encontrado(s)`);
 
-  const { data: pricingRows, error: pricingError } = await supabase
-    .from('pricing_config')
-    .select('*');
-
-  if (pricingError || !pricingRows?.length) {
-    console.error('❌ No hay tarifas en pricing_config. Ejecuta supabase/schema.sql');
-    process.exit(1);
-  }
-
-  const pricingByType = Object.fromEntries(
-    pricingRows.map((p) => [p.vehicle_type, p])
+  console.log('💰 Actualizando tarifas (solo auto y moto)...');
+  await supabase.from('pricing_config').upsert(
+    [
+      {
+        vehicle_type: 'car',
+        first_hour_rate: 7.0,
+        extra_hour_rate: 1.0,
+        grace_minutes: 15,
+        monthly_rate: 350.0,
+        updated_at: new Date().toISOString(),
+      },
+      {
+        vehicle_type: 'motorcycle',
+        first_hour_rate: 5.0,
+        extra_hour_rate: 1.0,
+        grace_minutes: 10,
+        monthly_rate: 150.0,
+        updated_at: new Date().toISOString(),
+      },
+      {
+        vehicle_type: 'truck',
+        first_hour_rate: 7.0,
+        extra_hour_rate: 1.0,
+        grace_minutes: 15,
+        monthly_rate: 450.0,
+        updated_at: new Date().toISOString(),
+      },
+    ],
+    { onConflict: 'vehicle_type' }
   );
 
-  console.log('🧹 Eliminando datos de prueba anteriores...');
+  const { data: pricingRows } = await supabase.from('pricing_config').select('*');
+  const pricingByType = Object.fromEntries(
+    (pricingRows ?? []).map((p) => [p.vehicle_type, p])
+  );
+
+  console.log('🧹 Limpiando datos de prueba anteriores...');
+  await supabase.from('worker_deposits').delete().like('notes', `${SEED_NOTE}%`);
+  await supabase.from('monthly_parking').delete().eq('notes', SEED_NOTE);
   await supabase.from('parking_entries').delete().eq('notes', SEED_NOTE);
 
-  const now = new Date();
-  const entries = [];
+  const platePool = Array.from({ length: 280 }, (_, i) => generatePlate(i + 1));
+  const monthlyPlates = platePool.slice(0, TOTAL_MONTHLY);
+  const activeMonthlyPlates = new Set(monthlyPlates.slice(0, ACTIVE_MONTHLY));
 
-  for (let i = 0; i < TOTAL_ENTRIES; i++) {
-    const isActive = i < ACTIVE_COUNT;
+  // ── Parqueo mensual ──────────────────────────────────────────
+  console.log(`📅 Generando ${TOTAL_MONTHLY} planes mensuales...`);
+  const monthlyRows = [];
+  const today = formatInTimeZone(new Date(), TZ, 'yyyy-MM-dd');
+
+  for (let i = 0; i < TOTAL_MONTHLY; i++) {
+    const vehicleType = i % 3 === 0 ? 'motorcycle' : 'car';
+    const durationMonths = randomItem([1, 1, 2, 3, 6, 12]);
+    let status = 'active';
+    let daysAgoStart = randomBetween(0, 20);
+
+    if (i >= ACTIVE_MONTHLY) {
+      status = i % 4 === 0 ? 'cancelled' : 'expired';
+      daysAgoStart = randomBetween(30, 120);
+    }
+
+    const startDate = formatInTimeZone(
+      addDays(fromZonedTime(`${today}T12:00:00`, TZ), -daysAgoStart),
+      TZ,
+      'yyyy-MM-dd'
+    );
+    const { period_start, period_end } = subscriptionPeriod(startDate, durationMonths);
+    const monthlyAmount =
+      vehicleType === 'motorcycle'
+        ? randomBetween(80, 180)
+        : randomBetween(220, 550);
+
+    const isPaid = status !== 'cancelled' || i % 2 === 0;
+    const paidAt = isPaid
+      ? fromZonedTime(
+          `${period_start}T${pad2(randomBetween(8, 18))}:${pad2(randomBetween(0, 59))}:00`,
+          TZ
+        ).toISOString()
+      : null;
+
+    monthlyRows.push({
+      plate: monthlyPlates[i],
+      vehicle_type: vehicleType,
+      monthly_amount: monthlyAmount,
+      period_start,
+      period_end,
+      status,
+      customer_name: CUSTOMER_NAMES[i % CUSTOMER_NAMES.length],
+      notes: SEED_NOTE,
+      worker_id: randomItem(workers).id,
+      paid_at: paidAt,
+      payment_method: paidAt ? 'cash' : null,
+    });
+  }
+
+  await insertBatches('monthly_parking', monthlyRows);
+
+  // ── Parqueo por horas ────────────────────────────────────────
+  console.log(`🚗 Generando ${TOTAL_HOURLY} entradas por horas...`);
+  const hourlyRows = [];
+  const now = new Date();
+
+  for (let i = 0; i < TOTAL_HOURLY; i++) {
+    const isActive = i < ACTIVE_HOURLY;
+    const isCancelled = !isActive && i < ACTIVE_HOURLY + CANCELLED_HOURLY;
     const vehicleType = randomItem(VEHICLE_TYPES);
     const pricing = pricingByType[vehicleType] ?? pricingByType.car;
-    const durationMin = randomItem(DURATION_MINUTES);
+    const worker = randomItem(workers);
+    const plate = randomItem(platePool);
 
     let daysAgo;
     if (isActive) {
       daysAgo = 0;
-    } else if (i < 25) {
-      daysAgo = 0;
-    } else if (i < 45) {
-      daysAgo = Math.floor(Math.random() * 7);
+    } else if (i < 120) {
+      daysAgo = randomBetween(0, 6);
+    } else if (i < 350) {
+      daysAgo = randomBetween(7, 30);
     } else {
-      daysAgo = 7 + Math.floor(Math.random() * 23);
+      daysAgo = randomBetween(31, 89);
     }
 
-    const { hour, minute } = isActive
-      ? { hour: now.getHours(), minute: Math.max(0, now.getMinutes() - (10 + i * 8)) }
-      : randomHourOffset();
+    const hour = isActive
+      ? Math.max(7, now.getHours() - randomBetween(0, 3))
+      : randomBetween(7, 21);
+    const minute = randomBetween(0, 59);
+    const entryAt = boliviaDate(daysAgo, hour, minute);
 
-    const entryAt = setBoliviaTime(addDays(now, daysAgo), hour, minute);
-    const exitAt = isActive ? null : addMinutes(entryAt, durationMin);
-    const amount = isActive ? null : calculateAmount(durationMin, pricing);
+    let exitAt = null;
+    let amount = null;
+    let status = 'active';
+    let paymentMethod = null;
+    let exitWorker = null;
 
-    entries.push({
-      plate: PLATE_PREFIXES[i % PLATE_PREFIXES.length],
+    if (!isActive) {
+      if (isCancelled) {
+        status = 'cancelled';
+        exitAt = new Date(entryAt.getTime() + randomBetween(5, 20) * 60 * 1000);
+        amount = null;
+      } else {
+        status = 'completed';
+        const durationMin = randomItem(DURATION_MINUTES);
+        exitAt = new Date(entryAt.getTime() + durationMin * 60 * 1000);
+        const hasMonthly = activeMonthlyPlates.has(plate);
+        amount = hasMonthly ? 0 : calculateAmount(durationMin, pricing);
+        paymentMethod = amount === 0 ? null : 'cash';
+        exitWorker = worker.id;
+      }
+    }
+
+    hourlyRows.push({
+      plate,
       vehicle_type: vehicleType,
-      status: isActive ? 'active' : 'completed',
+      status,
       entry_at: entryAt.toISOString(),
       exit_at: exitAt?.toISOString() ?? null,
       amount,
-      payment_method: isActive ? null : randomItem(PAYMENT_METHODS),
+      payment_method: paymentMethod,
       notes: SEED_NOTE,
-      worker_entry_id: workerId,
-      worker_exit_id: isActive ? null : workerId,
+      worker_entry_id: worker.id,
+      worker_exit_id: exitWorker,
     });
   }
 
-  console.log(`📦 Insertando ${entries.length} entradas de prueba...`);
+  await insertBatches('parking_entries', hourlyRows);
 
-  const batchSize = 25;
-  for (let i = 0; i < entries.length; i += batchSize) {
-    const batch = entries.slice(i, i + batchSize);
-    const { error } = await supabase.from('parking_entries').insert(batch);
-    if (error) {
-      console.error('❌ Error al insertar:', error.message);
-      process.exit(1);
+  // ── Depósitos semanales ──────────────────────────────────────
+  console.log(`🏦 Generando depósitos de las últimas ${DEPOSIT_WEEKS} semanas...`);
+  const depositRows = [];
+
+  for (let w = 1; w <= DEPOSIT_WEEKS; w++) {
+    const weekRef = addDays(now, -w * 7);
+    const { weekStart, weekEnd } = getWeekBounds(weekRef);
+    const weekStartIso = fromZonedTime(`${weekStart}T00:00:00`, TZ).toISOString();
+    const weekEndIso = fromZonedTime(`${weekEnd}T23:59:59`, TZ).toISOString();
+
+    for (const worker of workers) {
+      const { data: hourly } = await supabase
+        .from('parking_entries')
+        .select('amount')
+        .eq('status', 'completed')
+        .eq('worker_exit_id', worker.id)
+        .eq('notes', SEED_NOTE)
+        .gt('amount', 0)
+        .gte('exit_at', weekStartIso)
+        .lte('exit_at', weekEndIso);
+
+      const { data: monthly } = await supabase
+        .from('monthly_parking')
+        .select('monthly_amount, period_start, period_end, paid_at')
+        .eq('worker_id', worker.id)
+        .eq('notes', SEED_NOTE)
+        .not('paid_at', 'is', null)
+        .gte('paid_at', weekStartIso)
+        .lte('paid_at', weekEndIso);
+
+      const hourlyTotal = (hourly ?? []).reduce((s, r) => s + Number(r.amount), 0);
+      let monthlyTotal = 0;
+      for (const m of monthly ?? []) {
+        monthlyTotal +=
+          Number(m.monthly_amount) * countPeriodMonths(m.period_start, m.period_end);
+      }
+
+      const expected = Math.round((hourlyTotal + monthlyTotal) * 100) / 100;
+      if (expected <= 0) continue;
+
+      const variance = randomBetween(-5, 5) / 100;
+      const deposited = Math.max(0, Math.round(expected * (1 + variance) * 100) / 100);
+
+      const confirmDay = addDays(fromZonedTime(`${weekEnd}T12:00:00`, TZ), randomBetween(0, 2));
+      confirmDay.setUTCHours(randomBetween(13, 23), randomBetween(0, 59), 0, 0);
+
+      depositRows.push({
+        worker_id: worker.id,
+        week_start: weekStart,
+        week_end: weekEnd,
+        expected_amount: expected,
+        deposited_amount: deposited,
+        hourly_total: Math.round(hourlyTotal * 100) / 100,
+        monthly_total: Math.round(monthlyTotal * 100) / 100,
+        hourly_count: hourly?.length ?? 0,
+        monthly_count: monthly?.length ?? 0,
+        notes: `${SEED_NOTE} - depósito semana ${weekStart}`,
+        confirmed_at: confirmDay.toISOString(),
+      });
     }
   }
 
-  const completed = entries.filter((e) => e.status === 'completed').length;
-  const active = entries.filter((e) => e.status === 'active').length;
-  const totalRevenue = entries.reduce((sum, e) => sum + (e.amount ?? 0), 0);
+  if (depositRows.length > 0) {
+    await insertBatches('worker_deposits', depositRows, 50);
+  } else {
+    console.log('   (sin depósitos — ¿existe la tabla worker_deposits?)');
+  }
 
-  console.log('\n✅ Datos de prueba creados');
-  console.log(`   Completadas: ${completed}`);
-  console.log(`   Activas:     ${active}`);
-  console.log(`   Ingresos:    Bs. ${totalRevenue.toFixed(2)}`);
-  console.log('\n💡 Para borrarlos: npm run seed:data (los reemplaza automáticamente)');
+  // ── Resumen ──────────────────────────────────────────────────
+  const completed = hourlyRows.filter((e) => e.status === 'completed').length;
+  const active = hourlyRows.filter((e) => e.status === 'active').length;
+  const cancelled = hourlyRows.filter((e) => e.status === 'cancelled').length;
+  const revenue = hourlyRows.reduce((s, e) => s + (e.amount ?? 0), 0);
+  const monthlyRevenue = monthlyRows
+    .filter((m) => m.paid_at)
+    .reduce(
+      (s, m) =>
+        s + m.monthly_amount * countPeriodMonths(m.period_start, m.period_end),
+      0
+    );
+
+  console.log('\n✅ Base de datos llena con datos de demostración\n');
+  console.log('   Tarifas:        auto Bs 7 + Bs 1/hr | moto Bs 5 + Bs 1/hr');
+  console.log(`   Por horas:      ${hourlyRows.length} (${active} activas, ${completed} completadas, ${cancelled} canceladas)`);
+  console.log(`   Mensual:        ${monthlyRows.length} (${ACTIVE_MONTHLY} activos)`);
+  console.log(`   Depósitos:      ${depositRows.length}`);
+  console.log(`   Ingresos horas: Bs ${revenue.toFixed(2)}`);
+  console.log(`   Ingresos mensual: Bs ${monthlyRevenue.toFixed(2)}`);
+  console.log(`   Placas ejemplo: ${platePool.slice(0, 5).join(', ')}...`);
+  console.log('\n💡 Para regenerar: npm run seed:data');
 }
 
 main().catch((err) => {

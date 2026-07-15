@@ -17,7 +17,7 @@ import type {
   PricingConfig,
   VehicleType,
 } from '@/types/database';
-import { VEHICLE_LABELS } from '@/types/database';
+import { ACTIVE_VEHICLE_LABELS, ACTIVE_VEHICLE_TYPES, VEHICLE_LABELS } from '@/types/database';
 import { Car, Clock, Loader2, Plus, Printer, Search, Banknote } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -81,7 +81,7 @@ function EntryForm({ pricing, userId, onSuccess }: EntryFormProps) {
         notes: notes || null,
         worker_entry_id: userId,
       })
-      .select('plate, entry_at')
+      .select('plate, entry_at, vehicle_type')
       .single();
 
     if (insertError || !entry) {
@@ -97,6 +97,7 @@ function EntryForm({ pricing, userId, onSuccess }: EntryFormProps) {
       const printResult = await printEntryLabel({
         plate: entry.plate,
         entryAt: entry.entry_at,
+        vehicleType: entry.vehicle_type,
       });
 
       if (printResult === 'direct') {
@@ -161,7 +162,8 @@ function EntryForm({ pricing, userId, onSuccess }: EntryFormProps) {
             onChange={(e) => setVehicleType(e.target.value as VehicleType)}
             className="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
-            {Object.entries(VEHICLE_LABELS).map(([key, label]) => {
+            {ACTIVE_VEHICLE_TYPES.map((key) => {
+              const label = ACTIVE_VEHICLE_LABELS[key];
               const config = pricing.find((p) => p.vehicle_type === key);
               const summary = config
                 ? formatPricingSummary(config)
@@ -569,6 +571,7 @@ export function WorkerDashboard({
     const printResult = await printEntryLabel({
       plate: entry.plate,
       entryAt: entry.entry_at,
+      vehicleType: entry.vehicle_type,
     });
     if (printResult === 'failed') {
       setPrintWarning('No se pudo imprimir. Verifica que npm run dev:all esté activo.');

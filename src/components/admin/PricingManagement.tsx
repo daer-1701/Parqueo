@@ -1,10 +1,15 @@
 'use client';
 
 import { createClient } from '@/lib/supabase/client';
-import { formatPricingSummary } from '@/lib/pricing';
+import { formatCurrency, formatPricingSummary } from '@/lib/pricing';
 import type { PricingConfig, VehicleType } from '@/types/database';
-import { VEHICLE_LABELS } from '@/types/database';
-import { Car, Clock, Loader2, Save, Truck, Bike } from 'lucide-react';
+import {
+  ACTIVE_VEHICLE_TYPES,
+  MONTHLY_VEHICLE_LABELS,
+  MONTHLY_VEHICLE_TYPES,
+  VEHICLE_LABELS,
+} from '@/types/database';
+import { Bike, Car, Clock, Loader2, Save, Truck } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
 const VEHICLE_ICONS: Record<VehicleType, typeof Car> = {
@@ -17,6 +22,7 @@ interface PricingRow extends PricingConfig {
   draftFirstHour: string;
   draftExtraHour: string;
   draftGrace: string;
+  draftMonthly: string;
 }
 
 interface PricingManagementProps {
@@ -26,15 +32,18 @@ interface PricingManagementProps {
 function toRow(config: PricingConfig): PricingRow {
   return {
     ...config,
+    monthly_rate: Number(config.monthly_rate ?? 0),
     draftFirstHour: String(config.first_hour_rate),
     draftExtraHour: String(config.extra_hour_rate),
     draftGrace: String(config.grace_minutes),
+    draftMonthly: String(config.monthly_rate ?? 0),
   };
 }
 
 export function PricingManagement({ initialPricing }: PricingManagementProps) {
   const [rows, setRows] = useState<PricingRow[]>(() => initialPricing.map(toRow));
-  const [saving, setSaving] = useState<VehicleType | null>(null);
+  const [savingHourly, setSavingHourly] = useState<VehicleType | null>(null);
+  const [savingMonthly, setSavingMonthly] = useState<VehicleType | null>(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const supabase = createClient();
@@ -60,7 +69,7 @@ export function PricingManagement({ initialPricing }: PricingManagementProps) {
     }
   }, [success]);
 
-  function updateDraft(
+  function updateHourlyDraft(
     vehicleType: VehicleType,
     field: 'first' | 'extra' | 'grace',
     value: string
@@ -81,7 +90,15 @@ export function PricingManagement({ initialPricing }: PricingManagementProps) {
     );
   }
 
-  async function handleSave(vehicleType: VehicleType) {
+  function updateMonthlyDraft(vehicleType: VehicleType, value: string) {
+    setRows((prev) =>
+      prev.map((row) =>
+        row.vehicle_type === vehicleType ? { ...row, draftMonthly: value } : row
+      )
+    );
+  }
+
+  async function handleSaveHourly(vehicleType: VehicleType) {
     const row = rows.find((r) => r.vehicle_type === vehicleType);
     if (!row) return;
 
@@ -102,7 +119,7 @@ export function PricingManagement({ initialPricing }: PricingManagementProps) {
       return;
     }
 
-    setSaving(vehicleType);
+    setSavingHourly(vehicleType);
     setError('');
     setSuccess('');
 
@@ -116,28 +133,54 @@ export function PricingManagement({ initialPricing }: PricingManagementProps) {
       })
       .eq('vehicle_type', vehicleType);
 
-    setSaving(null);
+    setSavingHourly(null);
 
     if (updateError) {
-      setError('Error al guardar la tarifa');
+      setError('Error al guardar la tarifa por horas');
       return;
     }
 
-    setSuccess(`Tarifa de ${VEHICLE_LABELS[vehicleType]} actualizada`);
+    setSuccess(`Tarifa por horas de ${VEHICLE_LABELS[vehicleType]} actualizada`);
     await loadPricing();
   }
 
-  const orderedTypes: VehicleType[] = ['car', 'motorcycle', 'truck'];
+  async function handleSaveMonthly(vehicleType: VehicleType) {
+    const row = rows.find((r) => r.vehicle_type === vehicleType);
+    if (!row) return;
+
+    const monthly = parseFloat(row.draftMonthly);
+    if (isNaN(monthly) || monthly < 0) {
+      setError('El precio mensual debe ser 0 o mayor');
+      return;
+    }
+
+    setSavingMonthly(vehicleType);
+    setError('');
+    setSuccess('');
+
+    const { error: updateError } = await supabase
+      .from('pricing_config')
+      .update({
+        monthly_rate: monthly,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('vehicle_type', vehicleType);
+
+    setSavingMonthly(null);
+
+    if (updateError) {
+      setError(
+        'Error al guardar tarifa mensual. ¿Ejecutaste migrate-monthly-pricing.sql en Supabase?'
+      );
+      return;
+    }
+
+    setSuccess(`Tarifa mensual de ${MONTHLY_VEHICLE_LABELS[vehicleType]} actualizada`);
+    await loadPricing();
+  }
 
   return (
-    <div className="space-y-4 sm:space-y-6">
-      <div>
-        <h2 className="text-lg font-semibold text-slate-900">Tarifas del parqueo</h2>
-        <p className="text-sm text-slate-500 mt-1">
-          1ra hora siempre se cobra completa. La gracia solo aplica en horas adicionales.
-        </p>
-      </div>
-
+    <div className="space-y-8">
       {error && (
         <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">
           {error}
@@ -150,108 +193,158 @@ export function PricingManagement({ initialPricing }: PricingManagementProps) {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {orderedTypes.map((type) => {
-          const row = rows.find((r) => r.vehicle_type === type);
-          if (!row) return null;
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold text-slate-900">Tarifas por horas</h2>
+          <p className="text-sm text-slate-500 mt-1">
+            Automóvil y motocicleta. La 1ra hora se cobra completa; la gracia solo aplica después.
+          </p>
+        </div>
 
-          const Icon = VEHICLE_ICONS[type];
-          const isSaving = saving === type;
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {ACTIVE_VEHICLE_TYPES.map((type) => {
+            const row = rows.find((r) => r.vehicle_type === type);
+            if (!row) return null;
 
-          return (
-            <div
-              key={type}
-              className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 flex flex-col"
-            >
-              <div className="flex items-center gap-3 mb-5">
-                <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
-                  <Icon className="w-5 h-5 text-blue-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-slate-900">{VEHICLE_LABELS[type]}</h3>
-                  <p className="text-xs text-slate-500">{formatPricingSummary(row)}</p>
-                </div>
-              </div>
+            const Icon = VEHICLE_ICONS[type];
+            const isSaving = savingHourly === type;
 
-              <div className="space-y-4 flex-1">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                    1ra hora (Bs.)
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={row.draftFirstHour}
-                    onChange={(e) => updateDraft(type, 'first', e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 text-base sm:text-sm"
-                  />
+            return (
+              <div
+                key={`hourly-${type}`}
+                className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 flex flex-col"
+              >
+                <div className="flex items-center gap-3 mb-5">
+                  <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
+                    <Icon className="w-5 h-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-slate-900">{VEHICLE_LABELS[type]}</h3>
+                    <p className="text-xs text-slate-500">{formatPricingSummary(row)}</p>
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                    Hora extra (Bs.)
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={row.draftExtraHour}
-                    onChange={(e) => updateDraft(type, 'extra', e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 text-base sm:text-sm"
-                  />
-                  <p className="text-xs text-slate-400 mt-1">
-                    Precio por cada hora después de la primera
-                  </p>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                    Minutos de gracia
-                  </label>
-                  <div className="relative">
-                    <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <div className="space-y-4 flex-1">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                      1ra hora (Bs.)
+                    </label>
                     <input
                       type="number"
                       min="0"
-                      step="1"
-                      value={row.draftGrace}
-                      onChange={(e) => updateDraft(type, 'grace', e.target.value)}
-                      className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 text-base sm:text-sm"
+                      step="0.01"
+                      value={row.draftFirstHour}
+                      onChange={(e) => updateHourlyDraft(type, 'first', e.target.value)}
+                      className="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
-                  <p className="text-xs text-slate-400 mt-1">
-                    Solo después de la 1ra hora, no durante la primera
-                  </p>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                      Hora extra (Bs.)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={row.draftExtraHour}
+                      onChange={(e) => updateHourlyDraft(type, 'extra', e.target.value)}
+                      className="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                      Minutos de gracia
+                    </label>
+                    <div className="relative">
+                      <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={row.draftGrace}
+                        onChange={(e) => updateHourlyDraft(type, 'grace', e.target.value)}
+                        className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
                 </div>
+
+                <button
+                  onClick={() => handleSaveHourly(type)}
+                  disabled={isSaving}
+                  className="mt-5 w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg flex items-center justify-center gap-2"
+                >
+                  {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  Guardar
+                </button>
               </div>
+            );
+          })}
+        </div>
+      </section>
 
-              <button
-                onClick={() => handleSave(type)}
-                disabled={isSaving}
-                className="mt-5 w-full py-3 sm:py-2.5 px-4 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2 touch-manipulation"
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold text-slate-900">Tarifas mensuales</h2>
+          <p className="text-sm text-slate-500 mt-1">
+            Precio por mes que el operador cobrará al registrar un plan mensual.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          {MONTHLY_VEHICLE_TYPES.map((type) => {
+            const row = rows.find((r) => r.vehicle_type === type);
+            if (!row) return null;
+
+            const Icon = VEHICLE_ICONS[type];
+            const isSaving = savingMonthly === type;
+
+            return (
+              <div
+                key={`monthly-${type}`}
+                className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 flex flex-col"
               >
-                {isSaving ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Save className="w-4 h-4" />
-                )}
-                Guardar
-              </button>
-            </div>
-          );
-        })}
-      </div>
+                <div className="flex items-center gap-3 mb-5">
+                  <div className="w-10 h-10 rounded-lg bg-green-50 flex items-center justify-center shrink-0">
+                    <Icon className="w-5 h-5 text-green-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-slate-900">
+                      {MONTHLY_VEHICLE_LABELS[type]}
+                    </h3>
+                    <p className="text-xs text-slate-500">
+                      Actual: {formatCurrency(Number(row.monthly_rate ?? 0))}/mes
+                    </p>
+                  </div>
+                </div>
 
-      <div className="bg-slate-50 rounded-xl border border-slate-200 p-4 sm:p-5 text-sm text-slate-600">
-        <p className="font-medium text-slate-800 mb-2">Ejemplo con Bs. 7 + Bs. 1/hr extra y 15 min de gracia</p>
-        <ul className="space-y-1 list-disc list-inside text-slate-500">
-          <li>4 min: Bs. 7 (1ra hora completa, sin gracia)</li>
-          <li>1h 2min: Bs. 7 (aún en 1ra hora + gracia extra)</li>
-          <li>1h 16min: Bs. 8 (7 + 1 hora extra)</li>
-          <li>2h 16min: Bs. 9 (7 + 2 horas extra)</li>
-        </ul>
-      </div>
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                    Precio mensual (Bs.)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={row.draftMonthly}
+                    onChange={(e) => updateMonthlyDraft(type, e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-green-500"
+                  />
+                </div>
+
+                <button
+                  onClick={() => handleSaveMonthly(type)}
+                  disabled={isSaving}
+                  className="mt-5 w-full py-3 px-4 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg flex items-center justify-center gap-2"
+                >
+                  {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  Guardar
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </section>
     </div>
   );
 }

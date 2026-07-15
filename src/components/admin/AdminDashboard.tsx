@@ -103,18 +103,12 @@ function buildChartData(entries: ParkingEntry[], range: BoliviaDateRange): Repor
 
 function computeSummary(entries: ParkingEntry[]): ReportSummary {
   const totalRevenue = entries.reduce((sum, e) => sum + (e.amount ?? 0), 0);
-  const totalHours = entries.reduce((sum, e) => {
-    if (!e.exit_at) return sum;
-    const hours =
-      (parseISO(e.exit_at).getTime() - parseISO(e.entry_at).getTime()) / (1000 * 60 * 60);
-    return sum + hours;
-  }, 0);
 
   return {
     total_entries: entries.length,
     total_revenue: totalRevenue,
-    avg_amount: entries.length > 0 ? totalRevenue / entries.length : 0,
-    avg_hours: entries.length > 0 ? totalHours / entries.length : 0,
+    avg_amount: 0,
+    avg_hours: 0,
   };
 }
 
@@ -247,7 +241,7 @@ export function AdminDashboard({ entries }: AdminDashboardProps) {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4">
         <div className="rounded-xl border bg-blue-50 text-blue-700 border-blue-100 p-4 sm:p-5">
           <p className="text-xs sm:text-sm font-medium opacity-80">Vehículos atendidos</p>
           <p className="text-xl sm:text-2xl font-bold mt-1">{summary.total_entries}</p>
@@ -255,14 +249,6 @@ export function AdminDashboard({ entries }: AdminDashboardProps) {
         <div className="rounded-xl border bg-green-50 text-green-700 border-green-100 p-4 sm:p-5">
           <p className="text-xs sm:text-sm font-medium opacity-80">Ingresos totales</p>
           <p className="text-lg sm:text-2xl font-bold mt-1 break-words">{formatCurrency(summary.total_revenue)}</p>
-        </div>
-        <div className="rounded-xl border bg-amber-50 text-amber-700 border-amber-100 p-4 sm:p-5">
-          <p className="text-xs sm:text-sm font-medium opacity-80">Ticket promedio</p>
-          <p className="text-lg sm:text-2xl font-bold mt-1 break-words">{formatCurrency(summary.avg_amount)}</p>
-        </div>
-        <div className="rounded-xl border bg-purple-50 text-purple-700 border-purple-100 p-4 sm:p-5">
-          <p className="text-xs sm:text-sm font-medium opacity-80">Estancia promedio</p>
-          <p className="text-xl sm:text-2xl font-bold mt-1">{summary.avg_hours.toFixed(1)}h</p>
         </div>
       </div>
 

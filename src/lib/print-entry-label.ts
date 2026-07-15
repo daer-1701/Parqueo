@@ -1,5 +1,7 @@
 import { formatBoliviaDate, formatBoliviaTime } from '@/lib/datetime';
 import { LABEL_PAGE_HEIGHT_MM, LABEL_PAGE_WIDTH_MM } from '@/lib/label-template';
+import type { VehicleType } from '@/types/database';
+import { VEHICLE_LABELS } from '@/types/database';
 
 const PRINT_SERVER_URL =
   process.env.NEXT_PUBLIC_PRINT_SERVER_URL?.trim() || 'http://127.0.0.1:3847';
@@ -21,9 +23,20 @@ export {
 export interface EntryLabelData {
   plate: string;
   entryAt: string;
+  vehicleType?: VehicleType;
 }
 
 export type PrintResult = 'direct' | 'dialog' | 'failed';
+
+function vehicleLabelFor(type?: VehicleType): string {
+  if (!type) return '';
+  const map: Record<VehicleType, string> = {
+    car: 'AUTOMOVIL',
+    motorcycle: 'MOTOCICLETA',
+    truck: 'CAMIONETA',
+  };
+  return map[type] ?? VEHICLE_LABELS[type] ?? '';
+}
 
 async function tryDirectPrint(data: EntryLabelData): Promise<boolean> {
   try {
@@ -33,7 +46,11 @@ async function tryDirectPrint(data: EntryLabelData): Promise<boolean> {
     const res = await fetch(`${PRINT_SERVER_URL}/print`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
+      body: JSON.stringify({
+        plate: data.plate,
+        entryAt: data.entryAt,
+        vehicleType: data.vehicleType,
+      }),
       signal: controller.signal,
     });
 
@@ -52,6 +69,7 @@ async function printWithDialog(data: EntryLabelData): Promise<boolean> {
     plate: escapeLabelHtml(data.plate),
     date: formatBoliviaDate(data.entryAt),
     time: formatBoliviaTime(data.entryAt),
+    vehicleLabel: escapeLabelHtml(vehicleLabelFor(data.vehicleType)),
   });
 
   if (typeof window === 'undefined') return false;

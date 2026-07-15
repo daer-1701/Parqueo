@@ -1,4 +1,6 @@
 import { Navbar } from '@/components/Navbar';
+import { RequireFreshLogin } from '@/components/RequireFreshLogin';
+import { WorkerDepositPendingBanner } from '@/components/worker/WorkerDepositPendingBanner';
 import { WorkerNav } from '@/components/worker/WorkerNav';
 import { getDashboardPath } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
@@ -27,17 +29,20 @@ export default async function WorkerLayout({
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <Navbar
-        title="Panel de Operador"
-        shortTitle="Operador"
-        userName={profile.full_name}
-        role="Operador"
-      />
-      <WorkerNav />
-      <main className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8 pb-safe">
-        {children}
-      </main>
-    </div>
+    <RequireFreshLogin>
+      <div className="min-h-screen bg-slate-50">
+        <Navbar
+          title="Panel de Operador"
+          shortTitle="Operador"
+          userName={profile.full_name}
+          role="Operador"
+        />
+        <WorkerNav />
+        <main className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8 pb-safe">
+          <WorkerDepositPendingBanner />
+          {children}
+        </main>
+      </div>
+    </RequireFreshLogin>
   );
 }

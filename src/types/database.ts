@@ -9,6 +9,9 @@ export interface Profile {
   full_name: string;
   role: UserRole;
   created_at: string;
+  is_locked?: boolean;
+  failed_login_attempts?: number;
+  locked_at?: string | null;
 }
 
 export interface PricingConfig {
@@ -17,6 +20,7 @@ export interface PricingConfig {
   first_hour_rate: number;
   extra_hour_rate: number;
   grace_minutes: number;
+  monthly_rate?: number;
   updated_at: string;
 }
 
@@ -38,6 +42,22 @@ export interface ParkingEntry {
 export interface ParkingEntryWithWorker extends ParkingEntry {
   worker_entry?: Profile;
   worker_exit?: Profile;
+}
+
+export interface WorkerDeposit {
+  id: string;
+  worker_id: string;
+  week_start: string;
+  week_end: string;
+  expected_amount: number;
+  deposited_amount: number;
+  hourly_total: number;
+  monthly_total: number;
+  hourly_count: number;
+  monthly_count: number;
+  notes: string | null;
+  confirmed_at: string;
+  created_at: string;
 }
 
 export interface MonthlyParking {
@@ -72,7 +92,30 @@ export interface ReportPeriodData {
 export const VEHICLE_LABELS: Record<VehicleType, string> = {
   car: 'Automóvil',
   motorcycle: 'Motocicleta',
-  truck: 'Camión',
+  truck: 'Vagoneta / Camioneta',
+};
+
+export type ActiveVehicleType = 'car' | 'motorcycle';
+
+/** Tipos activos en parqueo por horas */
+export const ACTIVE_VEHICLE_TYPES: ActiveVehicleType[] = ['car', 'motorcycle'];
+
+export const ACTIVE_VEHICLE_LABELS: Record<ActiveVehicleType, string> = {
+  car: 'Automóvil',
+  motorcycle: 'Motocicleta',
+};
+
+/** Tipos activos en parqueo mensual (3 categorías) */
+export const MONTHLY_VEHICLE_TYPES: VehicleType[] = [
+  'motorcycle',
+  'car',
+  'truck',
+];
+
+export const MONTHLY_VEHICLE_LABELS: Record<VehicleType, string> = {
+  motorcycle: 'Motocicleta',
+  car: 'Automóvil estándar',
+  truck: 'Vagoneta / Camioneta',
 };
 
 export const PAYMENT_LABELS: Record<PaymentMethod, string> = {

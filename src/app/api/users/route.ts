@@ -33,6 +33,9 @@ export async function GET() {
         role: (profile?.role ?? u.user_metadata?.role ?? 'worker') as UserRole,
         created_at: profile?.created_at ?? u.created_at,
         last_sign_in: u.last_sign_in_at,
+        is_locked: profile?.is_locked ?? false,
+        failed_login_attempts: profile?.failed_login_attempts ?? 0,
+        locked_at: profile?.locked_at ?? null,
       };
     });
 

@@ -1,5 +1,7 @@
 'use client';
 
+import { SupportButton } from '@/components/SupportButton';
+import { clearAppSessionMark } from '@/lib/session-gate';
 import { createClient } from '@/lib/supabase/client';
 import { Clock, LogOut } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -31,6 +33,7 @@ export function Navbar({ title, shortTitle, userName, role }: NavbarProps) {
   }, []);
 
   async function handleLogout() {
+    clearAppSessionMark();
     await supabase.auth.signOut();
     router.push('/login');
     router.refresh();
@@ -58,6 +61,7 @@ export function Navbar({ title, shortTitle, userName, role }: NavbarProps) {
             <span className="text-xs sm:text-sm text-slate-600 hidden min-[480px]:block max-w-[100px] sm:max-w-[140px] truncate">
               {userName}
             </span>
+            <SupportButton />
             <button
               onClick={handleLogout}
               className="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 text-sm text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors touch-manipulation"

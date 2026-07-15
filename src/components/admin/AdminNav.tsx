@@ -2,10 +2,11 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BarChart3, DollarSign, Users } from 'lucide-react';
+import { BarChart3, Banknote, DollarSign, Users } from 'lucide-react';
 
 const NAV_ITEMS = [
   { href: '/admin', label: 'Reportes', icon: BarChart3 },
+  { href: '/admin/depositos', label: 'Depósitos', icon: Banknote },
   { href: '/admin/tarifas', label: 'Tarifas', icon: DollarSign },
   { href: '/admin/usuarios', label: 'Usuarios', icon: Users },
 ];
@@ -14,9 +15,12 @@ export function AdminNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="grid grid-cols-3 sm:flex sm:flex-wrap gap-2 mb-4 sm:mb-6">
+    <nav className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 mb-4 sm:mb-6">
       {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
-        const active = pathname === href;
+        const active =
+          href === '/admin'
+            ? pathname === '/admin'
+            : pathname === href || pathname.startsWith(`${href}/`);
         return (
           <Link
             key={href}
