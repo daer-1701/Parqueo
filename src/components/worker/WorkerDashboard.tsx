@@ -106,7 +106,7 @@ function EntryForm({ pricing, userId, onSuccess }: EntryFormProps) {
         setPrintWarning('Impresión manual por Chrome (respaldo).');
       } else {
         setPrintWarning(
-          'Entrada registrada. No se pudo imprimir: en el PC de la impresora ejecuta scripts\\start-print-server.bat y déjalo abierto.'
+          'Entrada registrada. No se pudo imprimir: en este PC ejecuta ParqueoSys-Impresion.bat y déjalo abierto.'
         );
       }
     }
@@ -575,7 +575,7 @@ export function WorkerDashboard({
     });
     if (printResult === 'failed') {
       setPrintWarning(
-        'No se pudo imprimir: en el PC de la impresora ejecuta scripts\\start-print-server.bat y déjalo abierto.'
+        'No se pudo imprimir: en este PC ejecuta ParqueoSys-Impresion.bat y déjalo abierto.'
       );
     } else {
       setPrintWarning('');

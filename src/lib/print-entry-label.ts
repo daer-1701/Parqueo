@@ -25,7 +25,7 @@ export interface EntryLabelData {
 export type PrintResult = 'direct' | 'dialog' | 'failed';
 
 export const PRINT_SERVER_HINT =
-  'En el PC de la impresora ejecuta start-print-server.bat (o npm run print:server) y déjalo abierto.';
+  'En el PC de la impresora ejecuta ParqueoSys-Impresion.bat (carpeta print-agent) y déjalo abierto.';
 
 function vehicleLabelFor(type?: VehicleType): string {
   if (!type) return '';
