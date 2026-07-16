@@ -155,12 +155,21 @@ function sendJson(res, status, payload, req) {
     if (local || vercel) allowOrigin = origin;
   }
 
-  res.writeHead(status, {
+  // Chrome Private Network Access: HTTPS (Vercel) → http://127.0.0.1
+  const headers = {
     'Content-Type': 'application/json',
     'Access-Control-Allow-Origin': allowOrigin,
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
-  });
+    'Access-Control-Allow-Headers':
+      'Content-Type, Access-Control-Request-Private-Network',
+    'Access-Control-Allow-Private-Network': 'true',
+  };
+
+  res.writeHead(status, headers);
+  if (status === 204) {
+    res.end();
+    return;
+  }
   res.end(JSON.stringify(payload));
 }
 
@@ -220,5 +229,6 @@ server.listen(PORT, '127.0.0.1', () => {
     console.log('      PRINT_VIA=windows');
     console.log('      PRINT_MODE=gdi');
   }
-  console.log('   Deja esta ventana abierta mientras usas el panel de operador.\n');
+  console.log('   Con la web en Vercel: deja esta ventana abierta en el PC de la impresora.');
+  console.log('   Luego usa https://parqueo-two.vercel.app desde este mismo PC.\n');
 });

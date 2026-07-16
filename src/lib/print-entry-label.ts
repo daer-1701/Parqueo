@@ -6,14 +6,13 @@ import { VEHICLE_LABELS } from '@/types/database';
 const PRINT_SERVER_URL =
   process.env.NEXT_PUBLIC_PRINT_SERVER_URL?.trim() || 'http://127.0.0.1:3847';
 
-/** Solo si true: abre Chrome cuando falla la impresión directa */
-const CHROME_FALLBACK = process.env.NEXT_PUBLIC_PRINT_CHROME_FALLBACK === 'true';
+/**
+ * Impresión silenciosa (opcional): solo si el PC del operador tiene
+ * `npm run print:server` corriendo. Por defecto NO es obligatorio.
+ */
+const TRY_LOCAL_SERVER = process.env.NEXT_PUBLIC_PRINT_TRY_LOCAL === 'true';
 
-/** Solo Chrome, sin servicio local */
-const CHROME_ONLY = process.env.NEXT_PUBLIC_PRINT_CHROME_ONLY === 'true';
-
-/** La impresora tarda varios segundos por COM8; 900 ms abortaba y abría Chrome de más */
-const PRINT_TIMEOUT_MS = Number(process.env.NEXT_PUBLIC_PRINT_TIMEOUT_MS ?? 20000);
+const PRINT_TIMEOUT_MS = Number(process.env.NEXT_PUBLIC_PRINT_TIMEOUT_MS ?? 4000);
 
 export {
   LABEL_PAGE_HEIGHT_MM,
@@ -27,6 +26,9 @@ export interface EntryLabelData {
 }
 
 export type PrintResult = 'direct' | 'dialog' | 'failed';
+
+export const PRINT_SERVER_HINT =
+  'En el diálogo de impresión elige la impresora LABEL (debe estar instalada en este PC).';
 
 function vehicleLabelFor(type?: VehicleType): string {
   if (!type) return '';
@@ -74,52 +76,56 @@ async function printWithDialog(data: EntryLabelData): Promise<boolean> {
 
   if (typeof window === 'undefined') return false;
 
-  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const printWin = window.open(url, '_blank', 'width=220,height=160');
+  const iframe = document.createElement('iframe');
+  iframe.setAttribute('aria-hidden', 'true');
+  iframe.style.cssText =
+    'position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none';
+  document.body.appendChild(iframe);
 
-  if (!printWin) {
-    URL.revokeObjectURL(url);
+  const doc = iframe.contentDocument || iframe.contentWindow?.document;
+  if (!doc) {
+    iframe.remove();
     return false;
   }
 
+  doc.open();
+  doc.write(html);
+  doc.close();
+
   return new Promise((resolve) => {
-    let done = false;
-    printWin.onload = () => {
-      if (done) return;
-      done = true;
-      window.setTimeout(() => {
-        try {
-          printWin.focus();
-          printWin.print();
-          resolve(true);
-        } catch {
-          resolve(false);
-        } finally {
-          window.setTimeout(() => {
-            printWin.close();
-            URL.revokeObjectURL(url);
-          }, 1200);
-        }
-      }, 400);
+    const cleanup = () => {
+      window.setTimeout(() => iframe.remove(), 1500);
     };
+
+    window.setTimeout(() => {
+      try {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+        resolve(true);
+      } catch {
+        resolve(false);
+      } finally {
+        cleanup();
+      }
+    }, 350);
   });
 }
 
+/**
+ * Flujo para PCs de operadores (app en Vercel):
+ * 1) Diálogo de Windows → elegir impresora LABEL
+ * 2) Opcional: impresión silenciosa si NEXT_PUBLIC_PRINT_TRY_LOCAL=true y print:server está activo
+ */
 export async function printEntryLabel(data: EntryLabelData): Promise<PrintResult> {
-  if (!CHROME_ONLY) {
+  if (TRY_LOCAL_SERVER) {
     const direct = await tryDirectPrint(data);
     if (direct) return 'direct';
   }
 
-  if (CHROME_ONLY || CHROME_FALLBACK) {
-    const dialog = await printWithDialog(data);
-    return dialog ? 'dialog' : 'failed';
-  }
-
-  return 'failed';
+  const dialog = await printWithDialog(data);
+  return dialog ? 'dialog' : 'failed';
 }
 
 export function getPrintDialogHint(): string {
-  return 'Impresión automática vía npm run dev:all (sin Chrome)';
+  return PRINT_SERVER_HINT;
 }

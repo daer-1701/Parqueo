@@ -1,5 +1,5 @@
-import { AdminDepositsDashboard } from '@/components/admin/AdminDepositsDashboard';
+import { AdminDepositsPageClient } from '@/components/admin/AdminDepositsPageClient';
 
 export default function AdminDepositosPage() {
-  return <AdminDepositsDashboard />;
+  return <AdminDepositsPageClient />;
 }

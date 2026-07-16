@@ -103,10 +103,10 @@ function EntryForm({ pricing, userId, onSuccess }: EntryFormProps) {
       if (printResult === 'direct') {
         setPrintWarning('');
       } else if (printResult === 'dialog') {
-        setPrintWarning('Impresión manual por Chrome (modo respaldo).');
+        setPrintWarning('');
       } else {
         setPrintWarning(
-          'Entrada registrada. No se pudo imprimir: verifica que npm run dev:all esté activo.'
+          'Entrada registrada. No se pudo imprimir: elige la impresora LABEL en el diálogo o permite ventanas emergentes.'
         );
       }
     }
@@ -574,7 +574,9 @@ export function WorkerDashboard({
       vehicleType: entry.vehicle_type,
     });
     if (printResult === 'failed') {
-      setPrintWarning('No se pudo imprimir. Verifica que npm run dev:all esté activo.');
+      setPrintWarning(
+        'No se pudo imprimir: elige la impresora LABEL en el diálogo o permite ventanas emergentes.'
+      );
     } else {
       setPrintWarning('');
     }
