@@ -103,10 +103,10 @@ function EntryForm({ pricing, userId, onSuccess }: EntryFormProps) {
       if (printResult === 'direct') {
         setPrintWarning('');
       } else if (printResult === 'dialog') {
-        setPrintWarning('');
+        setPrintWarning('Impresión manual por Chrome (respaldo).');
       } else {
         setPrintWarning(
-          'Entrada registrada. No se pudo imprimir: elige la impresora LABEL en el diálogo o permite ventanas emergentes.'
+          'Entrada registrada. No se pudo imprimir: en el PC de la impresora ejecuta scripts\\start-print-server.bat y déjalo abierto.'
         );
       }
     }
@@ -575,7 +575,7 @@ export function WorkerDashboard({
     });
     if (printResult === 'failed') {
       setPrintWarning(
-        'No se pudo imprimir: elige la impresora LABEL en el diálogo o permite ventanas emergentes.'
+        'No se pudo imprimir: en el PC de la impresora ejecuta scripts\\start-print-server.bat y déjalo abierto.'
       );
     } else {
       setPrintWarning('');

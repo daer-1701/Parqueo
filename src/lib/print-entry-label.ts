@@ -6,13 +6,10 @@ import { VEHICLE_LABELS } from '@/types/database';
 const PRINT_SERVER_URL =
   process.env.NEXT_PUBLIC_PRINT_SERVER_URL?.trim() || 'http://127.0.0.1:3847';
 
-/**
- * Impresión silenciosa (opcional): solo si el PC del operador tiene
- * `npm run print:server` corriendo. Por defecto NO es obligatorio.
- */
-const TRY_LOCAL_SERVER = process.env.NEXT_PUBLIC_PRINT_TRY_LOCAL === 'true';
+/** Solo si true: abre diálogo de Chrome cuando falla el servicio local */
+const CHROME_FALLBACK = process.env.NEXT_PUBLIC_PRINT_CHROME_FALLBACK === 'true';
 
-const PRINT_TIMEOUT_MS = Number(process.env.NEXT_PUBLIC_PRINT_TIMEOUT_MS ?? 4000);
+const PRINT_TIMEOUT_MS = Number(process.env.NEXT_PUBLIC_PRINT_TIMEOUT_MS ?? 20000);
 
 export {
   LABEL_PAGE_HEIGHT_MM,
@@ -28,7 +25,7 @@ export interface EntryLabelData {
 export type PrintResult = 'direct' | 'dialog' | 'failed';
 
 export const PRINT_SERVER_HINT =
-  'En el diálogo de impresión elige la impresora LABEL (debe estar instalada en este PC).';
+  'En el PC de la impresora ejecuta start-print-server.bat (o npm run print:server) y déjalo abierto.';
 
 function vehicleLabelFor(type?: VehicleType): string {
   if (!type) return '';
@@ -93,10 +90,6 @@ async function printWithDialog(data: EntryLabelData): Promise<boolean> {
   doc.close();
 
   return new Promise((resolve) => {
-    const cleanup = () => {
-      window.setTimeout(() => iframe.remove(), 1500);
-    };
-
     window.setTimeout(() => {
       try {
         iframe.contentWindow?.focus();
@@ -105,25 +98,23 @@ async function printWithDialog(data: EntryLabelData): Promise<boolean> {
       } catch {
         resolve(false);
       } finally {
-        cleanup();
+        window.setTimeout(() => iframe.remove(), 1500);
       }
     }, 350);
   });
 }
 
-/**
- * Flujo para PCs de operadores (app en Vercel):
- * 1) Diálogo de Windows → elegir impresora LABEL
- * 2) Opcional: impresión silenciosa si NEXT_PUBLIC_PRINT_TRY_LOCAL=true y print:server está activo
- */
+/** Impresión automática vía servicio local en el PC de la impresora. */
 export async function printEntryLabel(data: EntryLabelData): Promise<PrintResult> {
-  if (TRY_LOCAL_SERVER) {
-    const direct = await tryDirectPrint(data);
-    if (direct) return 'direct';
+  const direct = await tryDirectPrint(data);
+  if (direct) return 'direct';
+
+  if (CHROME_FALLBACK) {
+    const dialog = await printWithDialog(data);
+    return dialog ? 'dialog' : 'failed';
   }
 
-  const dialog = await printWithDialog(data);
-  return dialog ? 'dialog' : 'failed';
+  return 'failed';
 }
 
 export function getPrintDialogHint(): string {
