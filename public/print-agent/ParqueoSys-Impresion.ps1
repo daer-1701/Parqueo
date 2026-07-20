@@ -73,17 +73,15 @@ function Print-LabelGdi {
     $sf.Alignment = [System.Drawing.StringAlignment]::Center
 
     $fBrand = New-Object System.Drawing.Font 'Arial', 7, ([System.Drawing.FontStyle]::Bold)
-    $fPlate = New-Object System.Drawing.Font 'Arial', 11, ([System.Drawing.FontStyle]::Bold)
-    $fVehicle = New-Object System.Drawing.Font 'Arial', 12, ([System.Drawing.FontStyle]::Bold)
+    $fVehicle = New-Object System.Drawing.Font 'Arial', 8, ([System.Drawing.FontStyle]::Bold)
+    $fPlate = New-Object System.Drawing.Font 'Arial', 14, ([System.Drawing.FontStyle]::Bold)
     $fMeta = New-Object System.Drawing.Font 'Arial', 7, ([System.Drawing.FontStyle]::Regular)
 
     try {
       $gap = 2.0
-      $lineH = @(
-        $fBrand.GetHeight($g),
-        $fPlate.GetHeight($g)
-      )
+      $lineH = @($fBrand.GetHeight($g))
       if ($script:Vehicle) { $lineH += $fVehicle.GetHeight($g) }
+      $lineH += $fPlate.GetHeight($g)
       $lineH += $fMeta.GetHeight($g)
       $lineH += $fMeta.GetHeight($g)
 
@@ -92,14 +90,15 @@ function Print-LabelGdi {
 
       $g.DrawString('PARQUEO', $fBrand, $black, ($w / 2), $y, $sf)
       $y += $lineH[0] + $gap
-      $g.DrawString($script:Plate, $fPlate, $black, ($w / 2), $y, $sf)
-      $y += $lineH[1] + $gap
-      $idx = 2
+      $idx = 1
       if ($script:Vehicle) {
         $g.DrawString($script:Vehicle, $fVehicle, $black, ($w / 2), $y, $sf)
         $y += $lineH[$idx] + $gap
         $idx++
       }
+      $g.DrawString($script:Plate, $fPlate, $black, ($w / 2), $y, $sf)
+      $y += $lineH[$idx] + $gap
+      $idx++
       $g.DrawString($script:Date, $fMeta, $black, ($w / 2), $y, $sf)
       $y += $lineH[$idx] + $gap
       $g.DrawString($script:Time, $fMeta, $black, ($w / 2), $y, $sf)

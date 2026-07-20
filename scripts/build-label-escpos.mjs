@@ -16,19 +16,17 @@ export function buildLabelEscPos({ plate, date, time, vehicleLabel = '' }) {
     Buffer.from([ESC, 0x45, 0x01]),
     line('PARQUEO'),
     Buffer.from([ESC, 0x45, 0x00]),
-    Buffer.from([GS, 0x21, 0x11]),
-    Buffer.from([ESC, 0x45, 0x01]),
-    line(plate),
-    Buffer.from([ESC, 0x45, 0x00]),
+    Buffer.from([GS, 0x21, 0x00]),
   ];
 
   if (vehicleLabel) {
-    parts.push(Buffer.from([GS, 0x21, 0x11]));
-    parts.push(Buffer.from([ESC, 0x45, 0x01]));
     parts.push(line(vehicleLabel.toUpperCase()));
-    parts.push(Buffer.from([ESC, 0x45, 0x00]));
   }
 
+  parts.push(Buffer.from([GS, 0x21, 0x11]));
+  parts.push(Buffer.from([ESC, 0x45, 0x01]));
+  parts.push(line(plate));
+  parts.push(Buffer.from([ESC, 0x45, 0x00]));
   parts.push(Buffer.from([GS, 0x21, 0x00]));
   parts.push(line(date));
   parts.push(line(time));

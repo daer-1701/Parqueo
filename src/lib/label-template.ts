@@ -48,14 +48,14 @@ body{
   -webkit-print-color-adjust:exact;print-color-adjust:exact;
   page-break-before:avoid;page-break-after:avoid
 }
-.t{font-size:6.5pt;font-weight:800;letter-spacing:0.6px;margin:0 0 0.6mm}
-.p{font-size:11pt;font-weight:800;letter-spacing:0.6px;line-height:1;margin:0 0 0.5mm}
-.v{font-size:9pt;font-weight:800;letter-spacing:0.3px;line-height:1.05;margin:0 0 0.6mm;text-transform:uppercase}
+.t{font-size:6.5pt;font-weight:800;letter-spacing:0.6px;margin:0 0 0.4mm}
+.v{font-size:7pt;font-weight:700;letter-spacing:0.3px;line-height:1.05;margin:0 0 0.5mm;text-transform:uppercase}
+.p{font-size:13pt;font-weight:800;letter-spacing:0.6px;line-height:1;margin:0 0 0.6mm}
 .m{font-size:5.5pt;letter-spacing:0.2px;color:#222;margin:0.15mm 0}
 </style></head><body>
 <div class="t">PARQUEO</div>
-<div class="p">${plate}</div>
 ${vehicleBlock}
+<div class="p">${plate}</div>
 <div class="m">${date}</div>
 <div class="m">${time}</div>
 </body></html>`;

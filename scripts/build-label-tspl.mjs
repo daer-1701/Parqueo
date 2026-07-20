@@ -41,20 +41,20 @@ export function buildLabelTspl({ plate, date, time, vehicleLabel = '' }) {
   if (USE_HOME) lines.push('HOME');
   if (DEBUG_BOX) lines.push(`BOX 6,6,${pageW - 6},${pageH - 6},2`);
 
-  // Contenido centrado verticalmente en ~240 dots (30 mm)
+  // Contenido centrado: tipo chico, placa grande
   const midShift = 28;
   lines.push(
-    `TEXT ${centerX('PARQUEO', pageW, 10)},${y(14 + midShift)},"2",0,1,1,"PARQUEO"`,
-    `TEXT ${centerX(plate, pageW, 14)},${y(48 + midShift)},"2",0,2,1,"${plate}"`
+    `TEXT ${centerX('PARQUEO', pageW, 10)},${y(14 + midShift)},"2",0,1,1,"PARQUEO"`
   );
 
   if (vehicleLabel) {
     lines.push(
-      `TEXT ${centerX(vehicleLabel, pageW, 12)},${y(92 + midShift)},"2",0,1,2,"${vehicleLabel}"`
+      `TEXT ${centerX(vehicleLabel, pageW, 10)},${y(42 + midShift)},"2",0,1,1,"${vehicleLabel}"`
     );
   }
 
   lines.push(
+    `TEXT ${centerX(plate, pageW, 14)},${y(78 + midShift)},"2",0,2,2,"${plate}"`,
     `TEXT ${centerX(date, pageW, 8)},${y(128 + midShift)},"2",0,1,1,"${date}"`,
     `TEXT ${centerX(time, pageW, 10)},${y(152 + midShift)},"2",0,1,1,"${time}"`,
     'PRINT 1,1'
