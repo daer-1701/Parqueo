@@ -1,4 +1,5 @@
 import { Navbar } from '@/components/Navbar';
+import { PrintAgentPanel } from '@/components/PrintAgentPanel';
 import { RequireFreshLogin } from '@/components/RequireFreshLogin';
 import { WorkerDepositPendingBanner } from '@/components/worker/WorkerDepositPendingBanner';
 import { WorkerNav } from '@/components/worker/WorkerNav';
@@ -39,6 +40,7 @@ export default async function WorkerLayout({
         />
         <WorkerNav />
         <main className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8 pb-safe">
+          <PrintAgentPanel />
           <WorkerDepositPendingBanner />
           {children}
         </main>
