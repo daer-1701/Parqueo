@@ -1,26 +1,18 @@
-# ParqueoSys — agente de impresión para PCs de operadores
+# ParqueoSys — impresión para el PC del operador
 
-## Qué enviar al operador
-Solo la carpeta `print-agent` (2 archivos):
-- `ParqueoSys-Impresion.bat`
-- `ParqueoSys-Impresion.ps1`
+## Recomendado (más cómodo)
 
-No necesita Node.js ni el proyecto completo.
+### Una sola vez por PC
+1. En la web, descarga en la misma carpeta:
+   - `Instalar-ParqueoSys-Impresora.bat`
+   - `Instalar-ParqueoSys-Impresora.ps1`
+2. Ejecuta el `.bat`
+3. El instalador descarga el agente, lo registra y lo pone al inicio de Windows
 
-## Requisitos en el PC
-1. Windows
-2. Impresora Tomate instalada como **LABEL** (USB)
-3. Papel de etiqueta 40×30 mm
+### Después
+- Al encender el PC, la impresión suele estar lista
+- Si no: en la web pulsa **Activar impresora** (abre el agente solo)
+- Usa https://parqueo-two.vercel.app en ese mismo PC
 
-## Uso
-1. Doble clic en `ParqueoSys-Impresion.bat`
-2. Dejar la ventana abierta
-3. Abrir https://parqueo-two.vercel.app **en ese mismo PC**
-4. Registrar vehículos → imprime solo
-
-## Si Windows bloquea el .ps1
-Clic derecho en `ParqueoSys-Impresion.ps1` → Propiedades → Desbloquear → Aceptar  
-Luego vuelve a abrir el `.bat`.
-
-## Si la impresora no se llama LABEL
-Edita la línea `$PrinterName = 'LABEL'` en `ParqueoSys-Impresion.ps1` con el nombre exacto de Windows.
+## Requisitos
+- Windows + impresora **LABEL** por USB + etiquetas 40×30 mm

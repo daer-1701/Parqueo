@@ -166,10 +166,19 @@ $listener.Prefixes.Add($prefix)
 try {
   $listener.Start()
 } catch {
+  # Ya hay un agente activo (botón de la web / inicio de Windows)
+  try {
+    $probe = Invoke-WebRequest -Uri "http://127.0.0.1:$Port/health" -UseBasicParsing -TimeoutSec 2
+    if ($probe.StatusCode -eq 200) {
+      Write-Host "ParqueoSys ya estaba activo en el puerto $Port." -ForegroundColor Green
+      Start-Sleep -Seconds 1
+      exit 0
+    }
+  } catch { }
   Write-Host "ERROR: No se pudo abrir el puerto $Port." -ForegroundColor Red
   Write-Host $_.Exception.Message
   Write-Host "Cierra otra ventana de ParqueoSys-Impresion si esta abierta." -ForegroundColor Yellow
-  Read-Host "Enter para salir"
+  Start-Sleep -Seconds 4
   exit 1
 }
 
