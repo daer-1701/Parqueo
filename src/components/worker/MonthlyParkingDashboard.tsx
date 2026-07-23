@@ -13,6 +13,7 @@ import {
   todayDateString,
   totalSubscriptionAmount,
 } from '@/lib/monthly-parking';
+import { formatPlateInput, isValidPlate, PLATE_MAX_LENGTH, PLATE_PLACEHOLDER } from '@/lib/plate';
 import { formatCurrency } from '@/lib/pricing';
 import type { MonthlyParking, PricingConfig, VehicleType } from '@/types/database';
 import { MONTHLY_VEHICLE_LABELS, MONTHLY_VEHICLE_TYPES } from '@/types/database';
@@ -277,8 +278,8 @@ export function MonthlyParkingDashboard({
     const normalizedPlate = normalizePlate(plate);
     const amount = parseMoneyInput(monthlyAmount);
 
-    if (!normalizedPlate) {
-      setError('Ingresa la placa');
+    if (!isValidPlate(normalizedPlate)) {
+      setError('La placa debe tener 4 números y 3 letras (ej. 4578DFC)');
       setLoading(false);
       return;
     }
@@ -388,10 +389,16 @@ export function MonthlyParkingDashboard({
             <input
               type="text"
               value={plate}
-              onChange={(e) => setPlate(e.target.value.toUpperCase())}
+              onChange={(e) => setPlate(formatPlateInput(e.target.value))}
               required
-              placeholder="ABC-1234"
-              className="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 uppercase"
+              maxLength={PLATE_MAX_LENGTH}
+              placeholder={PLATE_PLACEHOLDER}
+              inputMode="text"
+              autoComplete="off"
+              spellCheck={false}
+              pattern="[0-9]{4}[A-Z]{3}"
+              title="4 números y 3 letras, ej. 4578DFC"
+              className="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 uppercase font-mono tracking-wider"
             />
           </div>
           <div>
@@ -543,7 +550,7 @@ export function MonthlyParkingDashboard({
 
         <button
           type="submit"
-          disabled={loading || previewTotal === null}
+          disabled={loading || previewTotal === null || !isValidPlate(plate)}
           className="mt-4 w-full sm:w-auto px-6 py-2.5 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-medium rounded-lg flex items-center justify-center gap-2"
         >
           {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Banknote className="w-4 h-4" />}

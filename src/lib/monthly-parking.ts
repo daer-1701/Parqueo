@@ -2,10 +2,9 @@ import { addDays, addMonths, differenceInCalendarMonths, parseISO, subDays } fro
 import { formatInTimeZone } from 'date-fns-tz';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { APP_TIMEZONE } from '@/lib/datetime';
+import { normalizePlate } from '@/lib/plate';
 
-export function normalizePlate(plate: string): string {
-  return plate.trim().toUpperCase();
-}
+export { normalizePlate };
 
 export function todayDateString(): string {
   return formatInTimeZone(new Date(), APP_TIMEZONE, 'yyyy-MM-dd');

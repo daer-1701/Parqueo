@@ -10,6 +10,7 @@ import {
 } from '@/lib/pricing';
 import { APP_TIMEZONE, formatBoliviaTime } from '@/lib/datetime';
 import { hasActiveMonthlyPlate } from '@/lib/monthly-parking';
+import { formatPlateInput, isValidPlate, PLATE_MAX_LENGTH, PLATE_PLACEHOLDER } from '@/lib/plate';
 import { formatInTimeZone } from 'date-fns-tz';
 import { useNow } from '@/hooks/useNow';
 import type {
@@ -58,7 +59,13 @@ function EntryForm({ pricing, userId, onSuccess }: EntryFormProps) {
     setError('');
     setPrintWarning('');
 
-    const normalizedPlate = plate.trim().toUpperCase();
+    const normalizedPlate = formatPlateInput(plate);
+
+    if (!isValidPlate(normalizedPlate)) {
+      setError('La placa debe tener 4 números y 3 letras (ej. 4578DFC)');
+      setLoading(false);
+      return;
+    }
 
     const { data: existing } = await supabase
       .from('parking_entries')
@@ -146,10 +153,16 @@ function EntryForm({ pricing, userId, onSuccess }: EntryFormProps) {
           <input
             type="text"
             value={plate}
-            onChange={(e) => setPlate(e.target.value.toUpperCase())}
+            onChange={(e) => setPlate(formatPlateInput(e.target.value))}
             required
-            placeholder="ABC-1234"
-            className="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 uppercase"
+            maxLength={PLATE_MAX_LENGTH}
+            placeholder={PLATE_PLACEHOLDER}
+            inputMode="text"
+            autoComplete="off"
+            spellCheck={false}
+            pattern="[0-9]{4}[A-Z]{3}"
+            title="4 números y 3 letras, ej. 4578DFC"
+            className="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 uppercase font-mono tracking-wider"
           />
         </div>
 
@@ -199,7 +212,7 @@ function EntryForm({ pricing, userId, onSuccess }: EntryFormProps) {
 
       <button
         type="submit"
-        disabled={loading || !plate.trim()}
+        disabled={loading || !isValidPlate(plate)}
         className="mt-4 w-full sm:w-auto px-6 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
       >
         {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Car className="w-4 h-4" />}
