@@ -9,7 +9,7 @@ import { usePathname } from 'next/navigation';
 const NAV_ITEMS = [
   { href: '/worker', label: 'Por horas', icon: Car, showBadge: false },
   { href: '/worker/mensual', label: 'Mensual', icon: CalendarDays, showBadge: false },
-  { href: '/worker/deposito', label: 'Depósito', icon: Wallet, showBadge: true },
+  { href: '/worker/deposito', label: 'Arqueo', icon: Wallet, showBadge: true },
 ];
 
 export function WorkerNav() {

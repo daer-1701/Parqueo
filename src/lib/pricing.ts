@@ -1,19 +1,22 @@
 import { parseISO } from 'date-fns';
 import type { PricingConfig, VehicleType } from '@/types/database';
+import { isDayRateVehicle } from '@/types/database';
 
 const DEFAULT_FIRST_HOUR = 7;
 const DEFAULT_EXTRA_HOUR = 1;
 const DEFAULT_GRACE = 15;
+const DEFAULT_DAY_RATE = 10;
 
 export function getPricingForVehicle(
   vehicleType: VehicleType,
   pricing: PricingConfig[]
 ): Pick<PricingConfig, 'first_hour_rate' | 'extra_hour_rate' | 'grace_minutes'> {
   const config = pricing.find((p) => p.vehicle_type === vehicleType);
+  const defaultFirst = isDayRateVehicle(vehicleType) ? DEFAULT_DAY_RATE : DEFAULT_FIRST_HOUR;
   return {
-    first_hour_rate: config?.first_hour_rate ?? DEFAULT_FIRST_HOUR,
-    extra_hour_rate: config?.extra_hour_rate ?? DEFAULT_EXTRA_HOUR,
-    grace_minutes: config?.grace_minutes ?? DEFAULT_GRACE,
+    first_hour_rate: config?.first_hour_rate ?? defaultFirst,
+    extra_hour_rate: config?.extra_hour_rate ?? (isDayRateVehicle(vehicleType) ? 0 : DEFAULT_EXTRA_HOUR),
+    grace_minutes: config?.grace_minutes ?? (isDayRateVehicle(vehicleType) ? 0 : DEFAULT_GRACE),
   };
 }
 
@@ -21,6 +24,7 @@ export function getPricingForVehicle(
  * Lógica: 1ra hora siempre se cobra completa (sin gracia).
  * Después de la 1ra hora, aplican minutos de gracia antes de cobrar horas extra.
  * Las horas parciales extra se redondean hacia arriba.
+ * Excepción: tarifas de día fijo (ej. moto todo el día) → monto fijo.
  */
 export function calculateParkingAmount(
   vehicleType: VehicleType,
@@ -32,6 +36,10 @@ export function calculateParkingAmount(
     vehicleType,
     pricing
   );
+
+  if (isDayRateVehicle(vehicleType)) {
+    return first_hour_rate;
+  }
 
   const minutes = (exitAt.getTime() - entryAt.getTime()) / (1000 * 60);
 
@@ -51,6 +59,9 @@ export function calculateParkingAmount(
 }
 
 export function formatPricingSummary(config: PricingConfig): string {
+  if (isDayRateVehicle(config.vehicle_type)) {
+    return `${formatCurrency(config.first_hour_rate)} todo el día`;
+  }
   return `${formatCurrency(config.first_hour_rate)} 1ra hr + ${formatCurrency(config.extra_hour_rate)}/hr extra`;
 }
 

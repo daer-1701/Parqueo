@@ -11,6 +11,7 @@ function Get-VehicleLabel([string]$type) {
   switch ($type) {
     'car' { return 'AUTOMOVIL' }
     'motorcycle' { return 'MOTOCICLETA' }
+    'motorcycle_day' { return 'MOTO DIA' }
     'truck' { return 'CAMIONETA' }
     default { return '' }
   }

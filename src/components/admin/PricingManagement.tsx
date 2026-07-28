@@ -2,19 +2,21 @@
 
 import { createClient } from '@/lib/supabase/client';
 import { formatCurrency, formatPricingSummary } from '@/lib/pricing';
-import type { PricingConfig, VehicleType } from '@/types/database';
+import type { MonthlyVehicleType, PricingConfig, VehicleType } from '@/types/database';
 import {
-  ACTIVE_VEHICLE_TYPES,
+  DAY_VEHICLE_TYPES,
+  HOURLY_VEHICLE_TYPES,
   MONTHLY_VEHICLE_LABELS,
   MONTHLY_VEHICLE_TYPES,
   VEHICLE_LABELS,
 } from '@/types/database';
-import { Bike, Car, Clock, Loader2, Save, Truck } from 'lucide-react';
+import { Bike, Car, Clock, Loader2, Save, Sun, Truck } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
 const VEHICLE_ICONS: Record<VehicleType, typeof Car> = {
   car: Car,
   motorcycle: Bike,
+  motorcycle_day: Sun,
   truck: Truck,
 };
 
@@ -144,7 +146,7 @@ export function PricingManagement({ initialPricing }: PricingManagementProps) {
     await loadPricing();
   }
 
-  async function handleSaveMonthly(vehicleType: VehicleType) {
+  async function handleSaveMonthly(vehicleType: MonthlyVehicleType) {
     const row = rows.find((r) => r.vehicle_type === vehicleType);
     if (!row) return;
 
@@ -179,6 +181,43 @@ export function PricingManagement({ initialPricing }: PricingManagementProps) {
     await loadPricing();
   }
 
+  async function handleSaveDayRate(vehicleType: VehicleType) {
+    const row = rows.find((r) => r.vehicle_type === vehicleType);
+    if (!row) return;
+
+    const dayRate = parseFloat(row.draftFirstHour);
+    if (isNaN(dayRate) || dayRate < 0) {
+      setError('La tarifa del día debe ser 0 o mayor');
+      return;
+    }
+
+    setSavingHourly(vehicleType);
+    setError('');
+    setSuccess('');
+
+    const { error: updateError } = await supabase
+      .from('pricing_config')
+      .update({
+        first_hour_rate: dayRate,
+        extra_hour_rate: 0,
+        grace_minutes: 0,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('vehicle_type', vehicleType);
+
+    setSavingHourly(null);
+
+    if (updateError) {
+      setError(
+        'Error al guardar. ¿Ejecutaste migrate-motorcycle-day.sql en Supabase?'
+      );
+      return;
+    }
+
+    setSuccess(`Tarifa de ${VEHICLE_LABELS[vehicleType]} actualizada`);
+    await loadPricing();
+  }
+
   return (
     <div className="space-y-8">
       {error && (
@@ -202,7 +241,7 @@ export function PricingManagement({ initialPricing }: PricingManagementProps) {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {ACTIVE_VEHICLE_TYPES.map((type) => {
+          {HOURLY_VEHICLE_TYPES.map((type) => {
             const row = rows.find((r) => r.vehicle_type === type);
             if (!row) return null;
 
@@ -273,6 +312,75 @@ export function PricingManagement({ initialPricing }: PricingManagementProps) {
                   onClick={() => handleSaveHourly(type)}
                   disabled={isSaving}
                   className="mt-5 w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg flex items-center justify-center gap-2"
+                >
+                  {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  Guardar
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold text-slate-900">Tarifa del día</h2>
+          <p className="text-sm text-slate-500 mt-1">
+            Precio fijo por jornada, sin importar las horas. El operador lo elige al registrar la entrada.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {DAY_VEHICLE_TYPES.map((type) => {
+            const row = rows.find((r) => r.vehicle_type === type);
+            if (!row) {
+              return (
+                <div
+                  key={`day-missing-${type}`}
+                  className="bg-amber-50 rounded-xl border border-amber-200 p-4 sm:p-6 text-sm text-amber-800"
+                >
+                  Falta configurar <strong>{VEHICLE_LABELS[type]}</strong>. Ejecuta{' '}
+                  <code className="text-xs">migrate-motorcycle-day.sql</code> en Supabase.
+                </div>
+              );
+            }
+
+            const Icon = VEHICLE_ICONS[type];
+            const isSaving = savingHourly === type;
+
+            return (
+              <div
+                key={`day-${type}`}
+                className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 flex flex-col"
+              >
+                <div className="flex items-center gap-3 mb-5">
+                  <div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center shrink-0">
+                    <Icon className="w-5 h-5 text-amber-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-slate-900">{VEHICLE_LABELS[type]}</h3>
+                    <p className="text-xs text-slate-500">{formatPricingSummary(row)}</p>
+                  </div>
+                </div>
+
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                    Precio del día (Bs.)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={row.draftFirstHour}
+                    onChange={(e) => updateHourlyDraft(type, 'first', e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+
+                <button
+                  onClick={() => handleSaveDayRate(type)}
+                  disabled={isSaving}
+                  className="mt-5 w-full py-3 px-4 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-sm font-medium rounded-lg flex items-center justify-center gap-2"
                 >
                   {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                   Guardar

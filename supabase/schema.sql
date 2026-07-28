@@ -13,7 +13,7 @@ CREATE TYPE parking_status AS ENUM ('active', 'completed', 'cancelled');
 CREATE TYPE payment_method AS ENUM ('cash', 'card', 'transfer');
 
 -- Tipo de vehículo
-CREATE TYPE vehicle_type AS ENUM ('car', 'motorcycle', 'truck');
+CREATE TYPE vehicle_type AS ENUM ('car', 'motorcycle', 'motorcycle_day', 'truck');
 
 -- Perfiles vinculados a auth.users
 CREATE TABLE profiles (
@@ -194,6 +194,7 @@ CREATE POLICY "Admins gestionan entradas"
 INSERT INTO pricing_config (vehicle_type, first_hour_rate, extra_hour_rate, grace_minutes) VALUES
   ('car', 7.00, 1.00, 15),
   ('motorcycle', 7.00, 1.00, 15),
+  ('motorcycle_day', 10.00, 0.00, 0),
   ('truck', 7.00, 1.00, 15);
 
 -- ============================================================

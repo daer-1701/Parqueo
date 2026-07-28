@@ -2,7 +2,7 @@ export type UserRole = 'admin' | 'worker';
 export type ParkingStatus = 'active' | 'completed' | 'cancelled';
 export type MonthlyParkingStatus = 'active' | 'expired' | 'cancelled';
 export type PaymentMethod = 'cash' | 'card' | 'transfer';
-export type VehicleType = 'car' | 'motorcycle' | 'truck';
+export type VehicleType = 'car' | 'motorcycle' | 'motorcycle_day' | 'truck';
 
 export interface Profile {
   id: string;
@@ -92,31 +92,50 @@ export interface ReportPeriodData {
 export const VEHICLE_LABELS: Record<VehicleType, string> = {
   car: 'Automóvil',
   motorcycle: 'Motocicleta',
+  motorcycle_day: 'Moto todo el día',
   truck: 'Vagoneta / Camioneta',
 };
 
-export type ActiveVehicleType = 'car' | 'motorcycle';
+export type HourlyVehicleType = 'car' | 'motorcycle';
+export type DayVehicleType = 'motorcycle_day';
+export type ActiveVehicleType = HourlyVehicleType | DayVehicleType;
 
-/** Tipos activos en parqueo por horas */
-export const ACTIVE_VEHICLE_TYPES: ActiveVehicleType[] = ['car', 'motorcycle'];
+/** Tipos con tarifa por horas */
+export const HOURLY_VEHICLE_TYPES: HourlyVehicleType[] = ['car', 'motorcycle'];
+
+/** Tipos con tarifa fija del día */
+export const DAY_VEHICLE_TYPES: DayVehicleType[] = ['motorcycle_day'];
+
+/** Tipos activos en parqueo por horas / día (entrada worker) */
+export const ACTIVE_VEHICLE_TYPES: ActiveVehicleType[] = [
+  ...HOURLY_VEHICLE_TYPES,
+  ...DAY_VEHICLE_TYPES,
+];
 
 export const ACTIVE_VEHICLE_LABELS: Record<ActiveVehicleType, string> = {
   car: 'Automóvil',
   motorcycle: 'Motocicleta',
+  motorcycle_day: 'Moto todo el día',
 };
 
 /** Tipos activos en parqueo mensual (3 categorías) */
-export const MONTHLY_VEHICLE_TYPES: VehicleType[] = [
+export type MonthlyVehicleType = 'motorcycle' | 'car' | 'truck';
+
+export const MONTHLY_VEHICLE_TYPES: MonthlyVehicleType[] = [
   'motorcycle',
   'car',
   'truck',
 ];
 
-export const MONTHLY_VEHICLE_LABELS: Record<VehicleType, string> = {
+export const MONTHLY_VEHICLE_LABELS: Record<MonthlyVehicleType, string> = {
   motorcycle: 'Motocicleta',
   car: 'Automóvil estándar',
   truck: 'Vagoneta / Camioneta',
 };
+
+export function isDayRateVehicle(vehicleType: VehicleType): boolean {
+  return (DAY_VEHICLE_TYPES as VehicleType[]).includes(vehicleType);
+}
 
 export const PAYMENT_LABELS: Record<PaymentMethod, string> = {
   cash: 'Efectivo',

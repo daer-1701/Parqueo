@@ -73,6 +73,7 @@ function formatBoliviaTime(iso) {
 const VEHICLE_LABELS = {
   car: 'AUTOMOVIL',
   motorcycle: 'MOTOCICLETA',
+  motorcycle_day: 'MOTO DIA',
   truck: 'CAMIONETA',
 };
 

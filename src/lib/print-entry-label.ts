@@ -32,6 +32,7 @@ function vehicleLabelFor(type?: VehicleType): string {
   const map: Record<VehicleType, string> = {
     car: 'AUTOMOVIL',
     motorcycle: 'MOTOCICLETA',
+    motorcycle_day: 'MOTO DIA',
     truck: 'CAMIONETA',
   };
   return map[type] ?? VEHICLE_LABELS[type] ?? '';

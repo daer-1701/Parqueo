@@ -18,7 +18,7 @@ import type {
   PricingConfig,
   VehicleType,
 } from '@/types/database';
-import { ACTIVE_VEHICLE_LABELS, ACTIVE_VEHICLE_TYPES, VEHICLE_LABELS } from '@/types/database';
+import { ACTIVE_VEHICLE_LABELS, ACTIVE_VEHICLE_TYPES, VEHICLE_LABELS, isDayRateVehicle } from '@/types/database';
 import { Car, Clock, Loader2, Plus, Printer, Search, Banknote } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -98,8 +98,9 @@ function EntryForm({ pricing, userId, onSuccess }: EntryFormProps) {
     }
 
     const isMonthly = await hasActiveMonthlyPlate(supabase, normalizedPlate);
+    const skipLabel = isMonthly && !isDayRateVehicle(vehicleType);
 
-    if (!isMonthly) {
+    if (!skipLabel) {
       const { printEntryLabel } = await import('@/lib/print-entry-label');
       const printResult = await printEntryLabel({
         plate: entry.plate,
@@ -245,7 +246,8 @@ function CheckoutModal({ entry, pricing, userId, onClose, onSuccess }: CheckoutM
     now,
     pricing
   );
-  const amount = isMonthly ? 0 : hourlyAmount;
+  const appliesMonthly = isMonthly && !isDayRateVehicle(entry.vehicle_type);
+  const amount = appliesMonthly ? 0 : hourlyAmount;
 
   const receivedAmount = parseMoneyInput(received);
   const change = receivedAmount - amount;
@@ -273,10 +275,10 @@ function CheckoutModal({ entry, pricing, userId, onClose, onSuccess }: CheckoutM
   }, [entry.id, entry.plate, supabase]);
 
   useEffect(() => {
-    if (isMonthly) return;
+    if (appliesMonthly) return;
     const timer = window.setTimeout(() => receivedRef.current?.focus(), 150);
     return () => window.clearTimeout(timer);
-  }, [entry.id, isMonthly]);
+  }, [entry.id, appliesMonthly]);
 
   async function handleCheckout() {
     setLoading(true);
@@ -326,19 +328,19 @@ function CheckoutModal({ entry, pricing, userId, onClose, onSuccess }: CheckoutM
             </span>
           </div>
           <div className="flex justify-between text-lg font-bold border-t pt-3">
-            <span>{isMonthly ? 'Cobro por horas' : 'Total a cobrar'}</span>
-            <span className={isMonthly ? 'text-blue-600' : 'text-green-600'}>
-              {isMonthly ? 'Plan mensual' : formatCurrency(amount)}
+            <span>{appliesMonthly ? 'Cobro por horas' : 'Total a cobrar'}</span>
+            <span className={appliesMonthly ? 'text-blue-600' : 'text-green-600'}>
+              {appliesMonthly ? 'Plan mensual' : formatCurrency(amount)}
             </span>
           </div>
-          {isMonthly && (
+          {appliesMonthly && (
             <p className="text-sm text-blue-700 bg-blue-50 border border-blue-100 rounded-lg p-3">
               Esta placa tiene plan mensual vigente. No se cobra por horas.
             </p>
           )}
         </div>
 
-        {!isMonthly && (
+        {!appliesMonthly && (
         <div className="mb-6 p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
           <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
             <Banknote className="w-4 h-4 text-slate-500" />
@@ -402,7 +404,7 @@ function CheckoutModal({ entry, pricing, userId, onClose, onSuccess }: CheckoutM
             className="flex-1 py-3 sm:py-2.5 px-4 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2 touch-manipulation"
           >
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-            {isMonthly ? 'Registrar salida' : `Cobrar ${formatCurrency(amount)}`}
+            {appliesMonthly ? 'Registrar salida' : `Cobrar ${formatCurrency(amount)}`}
           </button>
         </div>
       </div>

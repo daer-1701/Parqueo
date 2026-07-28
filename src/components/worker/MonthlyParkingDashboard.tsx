@@ -15,7 +15,7 @@ import {
 } from '@/lib/monthly-parking';
 import { formatPlateInput, isValidPlate, PLATE_MAX_LENGTH, PLATE_PLACEHOLDER } from '@/lib/plate';
 import { formatCurrency } from '@/lib/pricing';
-import type { MonthlyParking, PricingConfig, VehicleType } from '@/types/database';
+import type { MonthlyParking, MonthlyVehicleType, PricingConfig } from '@/types/database';
 import { MONTHLY_VEHICLE_LABELS, MONTHLY_VEHICLE_TYPES } from '@/types/database';
 import {
   Banknote,
@@ -186,20 +186,22 @@ export function MonthlyParkingDashboard({
   monthlyRates,
 }: MonthlyParkingDashboardProps) {
   const rateMap = useMemo(() => {
-    const map = new Map<VehicleType, number>();
+    const map = new Map<MonthlyVehicleType, number>();
     for (const row of monthlyRates) {
-      map.set(row.vehicle_type, Number(row.monthly_rate ?? 0));
+      if ((MONTHLY_VEHICLE_TYPES as string[]).includes(row.vehicle_type)) {
+        map.set(row.vehicle_type as MonthlyVehicleType, Number(row.monthly_rate ?? 0));
+      }
     }
     return map;
   }, [monthlyRates]);
 
-  const defaultType: VehicleType = 'car';
+  const defaultType: MonthlyVehicleType = 'car';
   const [subscriptions, setSubscriptions] = useState(initialSubscriptions);
   const [search, setSearch] = useState('');
   const [startDate, setStartDate] = useState(todayDateString());
   const [durationMonths, setDurationMonths] = useState(1);
   const [plate, setPlate] = useState('');
-  const [vehicleType, setVehicleType] = useState<VehicleType>(defaultType);
+  const [vehicleType, setVehicleType] = useState<MonthlyVehicleType>(defaultType);
   const [customerName, setCustomerName] = useState('');
   const [monthlyAmount, setMonthlyAmount] = useState(
     String(rateMap.get(defaultType) ?? '')
@@ -212,7 +214,7 @@ export function MonthlyParkingDashboard({
   const [payTarget, setPayTarget] = useState<MonthlyParking | null>(null);
   const supabase = createClient();
 
-  function handleVehicleTypeChange(type: VehicleType) {
+  function handleVehicleTypeChange(type: MonthlyVehicleType) {
     setVehicleType(type);
     const rate = rateMap.get(type);
     setMonthlyAmount(rate !== undefined && rate > 0 ? String(rate) : '');
@@ -407,7 +409,7 @@ export function MonthlyParkingDashboard({
             </label>
             <select
               value={vehicleType}
-              onChange={(e) => handleVehicleTypeChange(e.target.value as VehicleType)}
+              onChange={(e) => handleVehicleTypeChange(e.target.value as MonthlyVehicleType)}
               className="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               {MONTHLY_VEHICLE_TYPES.map((key) => (
@@ -599,7 +601,8 @@ export function MonthlyParkingDashboard({
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-mono font-bold text-slate-900">{sub.plate}</span>
                       <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
-                        {MONTHLY_VEHICLE_LABELS[sub.vehicle_type] ?? sub.vehicle_type}
+                        {MONTHLY_VEHICLE_LABELS[sub.vehicle_type as MonthlyVehicleType] ??
+                          sub.vehicle_type}
                       </span>
                       {current && (
                         <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">

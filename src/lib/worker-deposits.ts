@@ -1,4 +1,4 @@
-import { addWeeks, endOfWeek, parseISO, startOfWeek } from 'date-fns';
+import { addDays, addWeeks, endOfDay, endOfWeek, parseISO, startOfDay, startOfWeek } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { formatInTimeZone, fromZonedTime, toZonedTime } from 'date-fns-tz';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -14,15 +14,30 @@ export interface WeekDateRange {
   label: string;
 }
 
-export interface WorkerWeekCollections {
-  weekStart: string;
-  weekEnd: string;
+export interface DayDateRange {
+  day: string;
+  start: Date;
+  end: Date;
   label: string;
+}
+
+export interface WorkerCollectionsSummary {
   expectedAmount: number;
   hourlyTotal: number;
   monthlyTotal: number;
   hourlyCount: number;
   monthlyCount: number;
+}
+
+export interface WorkerWeekCollections extends WorkerCollectionsSummary {
+  weekStart: string;
+  weekEnd: string;
+  label: string;
+}
+
+export interface WorkerDayCollections extends WorkerCollectionsSummary {
+  day: string;
+  label: string;
 }
 
 export interface WorkerDepositWithProfile extends WorkerDeposit {
@@ -46,25 +61,22 @@ export function getBoliviaWeekRange(weekOffset = 0): WeekDateRange {
   return { weekStart, weekEnd, start, end, label };
 }
 
-export async function findWeekCollections(
-  supabase: SupabaseClient,
-  workerId: string,
-  weekStart: string
-): Promise<WorkerWeekCollections | null> {
-  for (let offset = 0; offset >= -8; offset--) {
-    const collections = await calculateWorkerWeekCollections(supabase, workerId, offset);
-    if (collections.weekStart === weekStart) return collections;
-  }
-  return null;
+export function getBoliviaDayRange(dayOffset = 0): DayDateRange {
+  const zoned = addDays(toZonedTime(new Date(), APP_TIMEZONE), dayOffset);
+  const start = fromZonedTime(startOfDay(zoned), APP_TIMEZONE);
+  const end = fromZonedTime(endOfDay(zoned), APP_TIMEZONE);
+  const day = formatInTimeZone(start, APP_TIMEZONE, 'yyyy-MM-dd');
+  const label = formatInTimeZone(start, APP_TIMEZONE, "EEEE d 'de' MMMM", { locale: es });
+
+  return { day, start, end, label };
 }
 
-export async function calculateWorkerWeekCollections(
+async function calculateWorkerCollectionsInRange(
   supabase: SupabaseClient,
   workerId: string,
-  weekOffset = 0
-): Promise<WorkerWeekCollections> {
-  const { weekStart, weekEnd, start, end, label } = getBoliviaWeekRange(weekOffset);
-
+  start: Date,
+  end: Date
+): Promise<WorkerCollectionsSummary> {
   const [{ data: hourlyRows }, { data: monthlyRows }] = await Promise.all([
     supabase
       .from('parking_entries')
@@ -101,14 +113,54 @@ export async function calculateWorkerWeekCollections(
   }
 
   return {
-    weekStart,
-    weekEnd,
-    label,
     expectedAmount: Math.round((hourlyTotal + monthlyTotal) * 100) / 100,
     hourlyTotal: Math.round(hourlyTotal * 100) / 100,
     monthlyTotal: Math.round(monthlyTotal * 100) / 100,
     hourlyCount,
     monthlyCount,
+  };
+}
+
+export async function findWeekCollections(
+  supabase: SupabaseClient,
+  workerId: string,
+  weekStart: string
+): Promise<WorkerWeekCollections | null> {
+  for (let offset = 0; offset >= -8; offset--) {
+    const collections = await calculateWorkerWeekCollections(supabase, workerId, offset);
+    if (collections.weekStart === weekStart) return collections;
+  }
+  return null;
+}
+
+export async function calculateWorkerWeekCollections(
+  supabase: SupabaseClient,
+  workerId: string,
+  weekOffset = 0
+): Promise<WorkerWeekCollections> {
+  const { weekStart, weekEnd, start, end, label } = getBoliviaWeekRange(weekOffset);
+  const summary = await calculateWorkerCollectionsInRange(supabase, workerId, start, end);
+
+  return {
+    weekStart,
+    weekEnd,
+    label,
+    ...summary,
+  };
+}
+
+export async function calculateWorkerDayCollections(
+  supabase: SupabaseClient,
+  workerId: string,
+  dayOffset = 0
+): Promise<WorkerDayCollections> {
+  const { day, start, end, label } = getBoliviaDayRange(dayOffset);
+  const summary = await calculateWorkerCollectionsInRange(supabase, workerId, start, end);
+
+  return {
+    day,
+    label,
+    ...summary,
   };
 }
 

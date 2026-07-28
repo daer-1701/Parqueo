@@ -3,7 +3,7 @@
 import { formatBoliviaDateShort } from '@/lib/datetime';
 import { formatCurrency } from '@/lib/pricing';
 import type { WorkerDeposit } from '@/types/database';
-import type { WorkerWeekCollections } from '@/lib/worker-deposits';
+import type { WorkerDayCollections, WorkerWeekCollections } from '@/lib/worker-deposits';
 import {
   Banknote,
   CalendarDays,
@@ -24,6 +24,11 @@ interface WeekResponse {
   isCurrentWeek: boolean;
 }
 
+interface DayResponse {
+  collections: WorkerDayCollections;
+  isToday: boolean;
+}
+
 function parseMoneyInput(value: string): number {
   const normalized = value.trim().replace(',', '.');
   if (!normalized) return 0;
@@ -33,8 +38,11 @@ function parseMoneyInput(value: string): number {
 
 export function WorkerDepositDashboard() {
   const [weekOffset, setWeekOffset] = useState(0);
+  const [dayOffset, setDayOffset] = useState(0);
   const [data, setData] = useState<WeekResponse | null>(null);
+  const [dayData, setDayData] = useState<DayResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [dayLoading, setDayLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -60,9 +68,27 @@ export function WorkerDepositDashboard() {
     }
   }, []);
 
+  const loadDay = useCallback(async (offset: number) => {
+    setDayLoading(true);
+    try {
+      const res = await fetch(`/api/deposits/day?dayOffset=${offset}`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? 'Error al cargar el día');
+      setDayData(json);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al cargar el día');
+    } finally {
+      setDayLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     loadWeek(weekOffset);
   }, [weekOffset, loadWeek]);
+
+  useEffect(() => {
+    loadDay(dayOffset);
+  }, [dayOffset, loadDay]);
 
   async function handleConfirm() {
     if (!data) return;
@@ -99,16 +125,18 @@ export function WorkerDepositDashboard() {
   const collections = data?.collections;
   const deposit = data?.deposit;
   const canGoNext = weekOffset < 0;
+  const canGoNextDay = dayOffset < 0;
+  const dayCollections = dayData?.collections;
 
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
           <Banknote className="w-5 h-5 text-green-600" />
-          Depósito semanal
+          Arqueo y depósito
         </h2>
         <p className="text-sm text-slate-500 mt-1">
-          Efectivo cobrado en la semana (lunes a domingo) que debes depositar
+          Revisa lo cobrado cada día para tu arqueo, y confirma el depósito semanal
         </p>
       </div>
 
@@ -128,6 +156,83 @@ export function WorkerDepositDashboard() {
         <div className="flex items-center justify-between gap-3 mb-6">
           <button
             type="button"
+            onClick={() => setDayOffset((o) => o - 1)}
+            className="p-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600"
+            aria-label="Día anterior"
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+
+          <div className="text-center min-w-0">
+            <p className="text-xs text-slate-500 uppercase tracking-wide">Arqueo del día</p>
+            <p className="font-semibold text-slate-900 truncate capitalize">
+              {dayLoading ? '…' : dayCollections?.label}
+            </p>
+            {dayData?.isToday && (
+              <span className="inline-block mt-1 text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
+                Hoy
+              </span>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => canGoNextDay && setDayOffset((o) => o + 1)}
+            disabled={!canGoNextDay}
+            className="p-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 disabled:opacity-30"
+            aria-label="Día siguiente"
+          >
+            <ChevronRight className="w-5 h-5" />
+          </button>
+        </div>
+
+        {dayLoading ? (
+          <div className="flex justify-center py-8 text-slate-400">
+            <Loader2 className="w-6 h-6 animate-spin" />
+          </div>
+        ) : dayCollections ? (
+          <>
+            <div className="text-center mb-6 p-4 rounded-xl bg-blue-50 border border-blue-100">
+              <p className="text-sm text-blue-700 mb-1">Total cobrado</p>
+              <p className="text-3xl sm:text-4xl font-bold text-blue-700">
+                {formatCurrency(dayCollections.expectedAmount)}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="rounded-lg border border-slate-200 p-4">
+                <div className="flex items-center gap-2 text-slate-600 mb-2">
+                  <Car className="w-4 h-4" />
+                  <span className="text-sm font-medium">Por horas / día</span>
+                </div>
+                <p className="text-xl font-bold text-slate-900">
+                  {formatCurrency(dayCollections.hourlyTotal)}
+                </p>
+                <p className="text-xs text-slate-500 mt-1">
+                  {dayCollections.hourlyCount} salida(s) cobrada(s)
+                </p>
+              </div>
+              <div className="rounded-lg border border-slate-200 p-4">
+                <div className="flex items-center gap-2 text-slate-600 mb-2">
+                  <CalendarDays className="w-4 h-4" />
+                  <span className="text-sm font-medium">Mensual</span>
+                </div>
+                <p className="text-xl font-bold text-slate-900">
+                  {formatCurrency(dayCollections.monthlyTotal)}
+                </p>
+                <p className="text-xs text-slate-500 mt-1">
+                  {dayCollections.monthlyCount} cobro(s) registrado(s)
+                </p>
+              </div>
+            </div>
+          </>
+        ) : null}
+      </div>
+
+      <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6">
+        <div className="flex items-center justify-between gap-3 mb-6">
+          <button
+            type="button"
             onClick={() => setWeekOffset((o) => o - 1)}
             className="p-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600"
             aria-label="Semana anterior"
@@ -136,7 +241,7 @@ export function WorkerDepositDashboard() {
           </button>
 
           <div className="text-center min-w-0">
-            <p className="text-xs text-slate-500 uppercase tracking-wide">Semana</p>
+            <p className="text-xs text-slate-500 uppercase tracking-wide">Depósito semanal</p>
             <p className="font-semibold text-slate-900 truncate">
               {loading ? '…' : collections?.label}
             </p>
@@ -175,7 +280,7 @@ export function WorkerDepositDashboard() {
               <div className="rounded-lg border border-slate-200 p-4">
                 <div className="flex items-center gap-2 text-slate-600 mb-2">
                   <Car className="w-4 h-4" />
-                  <span className="text-sm font-medium">Por horas</span>
+                  <span className="text-sm font-medium">Por horas / día</span>
                 </div>
                 <p className="text-xl font-bold text-slate-900">
                   {formatCurrency(collections.hourlyTotal)}
@@ -286,7 +391,11 @@ export function WorkerDepositDashboard() {
                         disabled={submitting}
                         className="w-full sm:flex-1 py-3 px-4 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-medium rounded-lg flex items-center justify-center gap-2"
                       >
-                        {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                        {submitting ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <CheckCircle2 className="w-4 h-4" />
+                        )}
                         Confirmar depósito
                       </button>
                     </div>
@@ -313,7 +422,8 @@ export function WorkerDepositDashboard() {
               >
                 <div>
                   <p className="text-sm font-medium text-slate-900">
-                    {formatBoliviaDateShort(item.week_start)} – {formatBoliviaDateShort(item.week_end)}
+                    {formatBoliviaDateShort(item.week_start)} –{' '}
+                    {formatBoliviaDateShort(item.week_end)}
                   </p>
                   <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
                     <Clock className="w-3 h-3" />
