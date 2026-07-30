@@ -2,6 +2,7 @@
 
 import { getDashboardPath } from '@/lib/auth';
 import { markAppSessionActive } from '@/lib/session-gate';
+import { PasswordInput } from '@/components/PasswordInput';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
@@ -96,8 +97,8 @@ function LoginForm() {
             <label className="block text-sm font-medium text-slate-300 mb-1.5">
               Contraseña
             </label>
-            <input
-              type="password"
+            <PasswordInput
+              tone="dark"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required

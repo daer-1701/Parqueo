@@ -1,6 +1,7 @@
 'use client';
 
 import { formatBoliviaDateShort } from '@/lib/datetime';
+import { PasswordInput } from '@/components/PasswordInput';
 import type { UserRole } from '@/types/database';
 import {
   Loader2,
@@ -160,13 +161,12 @@ function UserFormModal({
             <label className="block text-sm font-medium text-slate-700 mb-1.5">
               {isEdit ? 'Nueva contraseña (opcional)' : 'Contraseña *'}
             </label>
-            <input
-              type="password"
+            <PasswordInput
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required={!isEdit}
-              minLength={isEdit ? undefined : 6}
-              placeholder={isEdit ? 'Dejar vacío para no cambiar' : 'Mínimo 6 caracteres'}
+              minLength={isEdit ? undefined : 8}
+              placeholder={isEdit ? 'Dejar vacío para no cambiar' : 'Mín. 8 caracteres, letras y números'}
               className="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
