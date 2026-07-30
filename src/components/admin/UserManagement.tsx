@@ -1,6 +1,7 @@
 'use client';
 
 import { formatBoliviaDateShort } from '@/lib/datetime';
+import { MIN_PASSWORD_LENGTH, validatePassword } from '@/lib/password-policy';
 import { PasswordInput } from '@/components/PasswordInput';
 import type { UserRole } from '@/types/database';
 import {
@@ -66,6 +67,11 @@ function UserFormModal({
     setSubmitting(true);
 
     try {
+      if (!isEdit || password.trim()) {
+        const passwordError = validatePassword(password);
+        if (passwordError) throw new Error(passwordError);
+      }
+
       if (isEdit && user) {
         const body: Record<string, string> = {
           full_name: fullName.trim(),
@@ -165,10 +171,17 @@ function UserFormModal({
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required={!isEdit}
-              minLength={isEdit ? undefined : 8}
-              placeholder={isEdit ? 'Dejar vacío para no cambiar' : 'Mín. 8 caracteres, letras y números'}
+              minLength={isEdit ? undefined : MIN_PASSWORD_LENGTH}
+              placeholder={
+                isEdit
+                  ? 'Dejar vacío para no cambiar'
+                  : `Mín. ${MIN_PASSWORD_LENGTH} caracteres, letras y números`
+              }
               className="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
+            <p className="text-xs text-slate-500 mt-1.5">
+              Mínimo {MIN_PASSWORD_LENGTH} caracteres, con letras y números.
+            </p>
           </div>
 
           <div>

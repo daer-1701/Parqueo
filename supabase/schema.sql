@@ -137,26 +137,42 @@ ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE parking_entries ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pricing_config ENABLE ROW LEVEL SECURITY;
 
--- Helper: obtener rol del usuario actual
+-- Helper: obtener rol del usuario actual (sin SECURITY DEFINER; lee propio perfil)
 CREATE OR REPLACE FUNCTION get_my_role()
 RETURNS user_role AS $$
   SELECT role FROM profiles WHERE id = auth.uid();
-$$ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public;
+$$ LANGUAGE sql STABLE SET search_path = public;
+
+REVOKE ALL ON FUNCTION get_my_role() FROM PUBLIC;
+REVOKE ALL ON FUNCTION get_my_role() FROM anon;
+GRANT EXECUTE ON FUNCTION get_my_role() TO authenticated;
+GRANT EXECUTE ON FUNCTION get_my_role() TO service_role;
+
+REVOKE ALL ON FUNCTION handle_new_user() FROM PUBLIC;
+REVOKE ALL ON FUNCTION handle_new_user() FROM anon;
+REVOKE ALL ON FUNCTION handle_new_user() FROM authenticated;
+
+REVOKE ALL ON FUNCTION calculate_parking_amount(vehicle_type, timestamptz, timestamptz) FROM PUBLIC;
+REVOKE ALL ON FUNCTION calculate_parking_amount(vehicle_type, timestamptz, timestamptz) FROM anon;
+GRANT EXECUTE ON FUNCTION calculate_parking_amount(vehicle_type, timestamptz, timestamptz) TO authenticated;
+GRANT EXECUTE ON FUNCTION calculate_parking_amount(vehicle_type, timestamptz, timestamptz) TO service_role;
 
 -- PROFILES
 CREATE POLICY "Usuarios ven su propio perfil"
   ON profiles FOR SELECT
+  TO authenticated
   USING (auth.uid() = id);
 
 CREATE POLICY "Admins ven todos los perfiles"
   ON profiles FOR SELECT
+  TO authenticated
   USING (get_my_role() = 'admin');
 
 CREATE POLICY "Admins actualizan perfiles"
   ON profiles FOR UPDATE
-  USING (get_my_role() = 'admin');
-
--- Perfiles: sin política INSERT (trigger SECURITY DEFINER / service_role)
+  TO authenticated
+  USING (get_my_role() = 'admin')
+  WITH CHECK (get_my_role() = 'admin');
 
 -- PRICING CONFIG
 CREATE POLICY "Todos los autenticados ven tarifas"

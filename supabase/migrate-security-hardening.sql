@@ -70,11 +70,20 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
--- 3) Helper de rol con search_path fijo
+-- 3) Helper de rol (INVOKER + search_path fijo; sin SECURITY DEFINER)
 CREATE OR REPLACE FUNCTION get_my_role()
 RETURNS user_role AS $$
   SELECT role FROM profiles WHERE id = auth.uid();
-$$ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public;
+$$ LANGUAGE sql STABLE SET search_path = public;
+
+REVOKE ALL ON FUNCTION get_my_role() FROM PUBLIC;
+REVOKE ALL ON FUNCTION get_my_role() FROM anon;
+GRANT EXECUTE ON FUNCTION get_my_role() TO authenticated;
+GRANT EXECUTE ON FUNCTION get_my_role() TO service_role;
+
+REVOKE ALL ON FUNCTION handle_new_user() FROM PUBLIC;
+REVOKE ALL ON FUNCTION handle_new_user() FROM anon;
+REVOKE ALL ON FUNCTION handle_new_user() FROM authenticated;
 
 -- 4) Forzar montos y campos en parking_entries
 CREATE OR REPLACE FUNCTION enforce_parking_entry_security()
