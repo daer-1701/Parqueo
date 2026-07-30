@@ -1,3 +1,4 @@
+import { setProfileLocked } from '@/lib/account-lock';
 import { createAdminClient, verifyAdminSession } from '@/lib/supabase/admin';
 import { NextResponse } from 'next/server';
 
@@ -15,19 +16,7 @@ export async function POST(_request: Request, context: RouteContext) {
 
   try {
     const admin = createAdminClient();
-    const { error } = await admin
-      .from('profiles')
-      .update({
-        is_locked: false,
-        failed_login_attempts: 0,
-        locked_at: null,
-      })
-      .eq('id', id);
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
+    await setProfileLocked(admin, id, false, 0);
     return NextResponse.json({ success: true });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Error interno';

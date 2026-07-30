@@ -4,6 +4,16 @@
 $ErrorActionPreference = 'Stop'
 $Port = 3847
 $PrinterName = 'LABEL'
+# Debe coincidir con NEXT_PUBLIC_PRINT_AGENT_TOKEN en Vercel / .env.local
+$PrintToken = if ($env:PRINT_AGENT_TOKEN) { $env:PRINT_AGENT_TOKEN } else { 'parqueo-local-print-v1' }
+$AllowedOrigins = @(
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+  'https://parqueo-two.vercel.app'
+)
+if ($env:PRINT_APP_ORIGIN) {
+  $AllowedOrigins += $env:PRINT_APP_ORIGIN.TrimEnd('/')
+}
 
 Add-Type -AssemblyName System.Drawing
 
@@ -114,17 +124,31 @@ function Print-LabelGdi {
 }
 
 function Set-CorsHeaders([System.Net.HttpListenerResponse]$res, [string]$origin) {
-  $allow = '*'
-  if ($origin) {
-    if ($origin -like 'http://localhost*' -or $origin -like 'http://127.0.0.1*' -or $origin -like '*vercel.app*') {
-      $allow = $origin
-    }
+  $allow = $null
+  if ($origin -and ($AllowedOrigins -contains $origin)) {
+    $allow = $origin
+  } elseif (-not $origin) {
+    # Peticiones same-origin / herramientas locales sin Origin
+    $allow = $AllowedOrigins[0]
   }
-  $res.Headers['Access-Control-Allow-Origin'] = $allow
+  if ($allow) {
+    $res.Headers['Access-Control-Allow-Origin'] = $allow
+  }
   $res.Headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
-  $res.Headers['Access-Control-Allow-Headers'] = 'Content-Type, Access-Control-Request-Private-Network'
+  $res.Headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Print-Token, Access-Control-Request-Private-Network'
   $res.Headers['Access-Control-Allow-Private-Network'] = 'true'
   $res.Headers['Content-Type'] = 'application/json; charset=utf-8'
+}
+
+function Test-PrintAuthorized([System.Net.HttpListenerRequest]$req) {
+  $headerToken = $req.Headers['X-Print-Token']
+  if (-not $headerToken) {
+    $auth = $req.Headers['Authorization']
+    if ($auth -and $auth.StartsWith('Bearer ')) {
+      $headerToken = $auth.Substring(7).Trim()
+    }
+  }
+  return ($headerToken -eq $PrintToken)
 }
 
 function Write-JsonResponse(
@@ -198,6 +222,10 @@ while ($listener.IsListening) {
     if (-not $path) { $path = '/' }
 
     if ($req.HttpMethod -eq 'OPTIONS') {
+      if ($origin -and -not ($AllowedOrigins -contains $origin)) {
+        Write-JsonResponse $res 403 @{ ok = $false; error = 'Origen no permitido' } $origin
+        continue
+      }
       Write-JsonResponse $res 204 @{} $origin
       continue
     }
@@ -213,6 +241,15 @@ while ($listener.IsListening) {
     }
 
     if ($req.HttpMethod -eq 'POST' -and $path -eq '/print') {
+      if ($origin -and -not ($AllowedOrigins -contains $origin)) {
+        Write-JsonResponse $res 403 @{ ok = $false; error = 'Origen no permitido' } $origin
+        continue
+      }
+      if (-not (Test-PrintAuthorized $req)) {
+        Write-JsonResponse $res 401 @{ ok = $false; error = 'Token de impresión inválido' } $origin
+        continue
+      }
+
       $reader = New-Object System.IO.StreamReader($req.InputStream, $req.ContentEncoding)
       $bodyText = $reader.ReadToEnd()
       $reader.Close()

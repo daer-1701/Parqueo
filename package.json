@@ -14,6 +14,7 @@
     "setup:users": "node scripts/create-initial-users.mjs",
     "seed:data": "node scripts/seed-parking-data.mjs",
     "seed:clear": "node scripts/clear-seed-data.mjs",
+    "data:clean": "node scripts/clean-operational-data.mjs",
     "print:server": "node scripts/print-server.mjs",
     "print:list": "node scripts/list-printers.mjs",
     "print:test": "node scripts/print-test.mjs",

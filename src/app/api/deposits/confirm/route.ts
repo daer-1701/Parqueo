@@ -1,8 +1,8 @@
 import {
-  calculateWorkerWeekCollections,
   findWeekCollections,
   getWorkerDepositForWeek,
 } from '@/lib/worker-deposits';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 
@@ -57,24 +57,42 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Semana no válida' }, { status: 400 });
   }
 
-  const depositedAmount =
+  // Monto esperado siempre recalculado en servidor (no confiar en el cliente)
+  const expectedAmount = collections.expectedAmount;
+  let depositedAmount =
     body.depositedAmount !== undefined
       ? Math.round(Number(body.depositedAmount) * 100) / 100
-      : collections.expectedAmount;
+      : expectedAmount;
 
   if (!Number.isFinite(depositedAmount) || depositedAmount < 0) {
     return NextResponse.json({ error: 'Monto depositado inválido' }, { status: 400 });
   }
 
-  const notes = body.notes?.trim() || null;
+  // Tope: no permitir declarar más del doble del esperado (abuso)
+  if (expectedAmount > 0 && depositedAmount > expectedAmount * 2) {
+    return NextResponse.json(
+      { error: 'Monto depositado fuera de rango permitido' },
+      { status: 400 }
+    );
+  }
 
-  const { data, error } = await supabase
+  const notes = body.notes?.trim() || null;
+  if (depositedAmount !== expectedAmount && !notes) {
+    return NextResponse.json(
+      { error: 'Indica una nota si el depósito difiere del esperado' },
+      { status: 400 }
+    );
+  }
+
+  // Insert via service role: workers no tienen política INSERT directa
+  const admin = createAdminClient();
+  const { data, error } = await admin
     .from('worker_deposits')
     .insert({
       worker_id: user.id,
       week_start: collections.weekStart,
       week_end: collections.weekEnd,
-      expected_amount: collections.expectedAmount,
+      expected_amount: expectedAmount,
       deposited_amount: depositedAmount,
       hourly_total: collections.hourlyTotal,
       monthly_total: collections.monthlyTotal,

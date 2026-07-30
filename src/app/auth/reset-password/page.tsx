@@ -1,6 +1,7 @@
 'use client';
 
 import { createClient } from '@/lib/supabase/client';
+import { validatePassword } from '@/lib/password-policy';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -55,15 +56,16 @@ export default function ResetPasswordPage() {
     };
   }, [supabase.auth]);
 
-  const passwordValid = password.length >= 6;
+  const passwordValid = !validatePassword(password);
   const passwordsMatch = password === confirm && confirm.length > 0;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
 
-    if (!passwordValid) {
-      setError('La contraseña debe tener al menos 6 caracteres');
+    const passwordError = validatePassword(password);
+    if (passwordError) {
+      setError(passwordError);
       return;
     }
 
@@ -132,10 +134,10 @@ export default function ResetPasswordPage() {
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         required
-                        minLength={6}
+                        minLength={8}
                         autoFocus
                         className="w-full pl-10 pr-4 py-3 rounded-lg bg-white/10 border border-white/20 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        placeholder="Mínimo 6 caracteres"
+                        placeholder="Mín. 8 caracteres, letras y números"
                       />
                     </div>
                   </div>
@@ -150,7 +152,7 @@ export default function ResetPasswordPage() {
                         value={confirm}
                         onChange={(e) => setConfirm(e.target.value)}
                         required
-                        minLength={6}
+                        minLength={8}
                         className="w-full pl-10 pr-4 py-3 rounded-lg bg-white/10 border border-white/20 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
                         placeholder="Repite la contraseña"
                       />

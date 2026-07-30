@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
+import { sanitizeAuthNextPath } from '@/lib/auth-urls';
 import { NextResponse } from 'next/server';
 
 export async function GET(request: Request) {
@@ -6,7 +7,7 @@ export async function GET(request: Request) {
   const code = searchParams.get('code');
   const tokenHash = searchParams.get('token_hash');
   const type = searchParams.get('type');
-  const next = searchParams.get('next') ?? '/auth/reset-password';
+  const next = sanitizeAuthNextPath(searchParams.get('next'));
 
   const supabase = await createClient();
 

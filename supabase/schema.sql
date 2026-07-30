@@ -56,7 +56,8 @@ CREATE INDEX idx_parking_entries_exit_at ON parking_entries(exit_at);
 
 -- ============================================================
 -- Función: calcular monto del parqueo
--- Lógica: gracia → 1ra hora (tarifa fija) → horas extra
+-- Lógica: 1ra hora siempre se cobra; gracia solo después de la 1ra hora
+-- (moto día = tarifa fija)
 -- ============================================================
 CREATE OR REPLACE FUNCTION calculate_parking_amount(
   p_vehicle_type vehicle_type,
@@ -67,8 +68,9 @@ DECLARE
   v_first DECIMAL(10,2);
   v_extra DECIMAL(10,2);
   v_grace INT;
-  v_minutes INT;
-  v_hours INT;
+  v_minutes NUMERIC;
+  v_billable_extra NUMERIC;
+  v_extra_hours INT;
 BEGIN
   SELECT first_hour_rate, extra_hour_rate, grace_minutes
   INTO v_first, v_extra, v_grace
@@ -76,29 +78,37 @@ BEGIN
   WHERE vehicle_type = p_vehicle_type;
 
   IF v_first IS NULL THEN
+    IF p_vehicle_type::text = 'motorcycle_day' THEN
+      RETURN 10.00;
+    END IF;
     v_first := 7.00;
     v_extra := 1.00;
     v_grace := 15;
   END IF;
 
-  v_minutes := EXTRACT(EPOCH FROM (p_exit_at - p_entry_at)) / 60;
-
-  IF v_minutes <= v_grace THEN
-    RETURN 0;
-  END IF;
-
-  v_hours := CEIL((v_minutes - v_grace) / 60.0);
-  IF v_hours < 1 THEN
-    v_hours := 1;
-  END IF;
-
-  IF v_hours <= 1 THEN
+  IF p_vehicle_type::text = 'motorcycle_day' THEN
     RETURN v_first;
   END IF;
 
-  RETURN v_first + (v_hours - 1) * v_extra;
+  v_minutes := EXTRACT(EPOCH FROM (p_exit_at - p_entry_at)) / 60.0;
+
+  IF v_minutes <= 0 THEN
+    RETURN 0;
+  END IF;
+
+  IF v_minutes <= 60 THEN
+    RETURN v_first;
+  END IF;
+
+  v_billable_extra := v_minutes - 60 - COALESCE(v_grace, 0);
+  IF v_billable_extra <= 0 THEN
+    RETURN v_first;
+  END IF;
+
+  v_extra_hours := CEIL(v_billable_extra / 60.0);
+  RETURN v_first + v_extra_hours * COALESCE(v_extra, 0);
 END;
-$$ LANGUAGE plpgsql STABLE;
+$$ LANGUAGE plpgsql STABLE SET search_path = public;
 
 -- ============================================================
 -- Trigger: crear perfil al registrar usuario
@@ -110,7 +120,7 @@ BEGIN
   VALUES (
     NEW.id,
     COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.email),
-    COALESCE((NEW.raw_user_meta_data->>'role')::user_role, 'worker')
+    'worker'
   );
   RETURN NEW;
 END;
@@ -131,7 +141,7 @@ ALTER TABLE pricing_config ENABLE ROW LEVEL SECURITY;
 CREATE OR REPLACE FUNCTION get_my_role()
 RETURNS user_role AS $$
   SELECT role FROM profiles WHERE id = auth.uid();
-$$ LANGUAGE sql STABLE SECURITY DEFINER;
+$$ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public;
 
 -- PROFILES
 CREATE POLICY "Usuarios ven su propio perfil"
@@ -146,9 +156,7 @@ CREATE POLICY "Admins actualizan perfiles"
   ON profiles FOR UPDATE
   USING (get_my_role() = 'admin');
 
-CREATE POLICY "Insertar perfil al registrarse"
-  ON profiles FOR INSERT
-  WITH CHECK (true);
+-- Perfiles: sin política INSERT (trigger SECURITY DEFINER / service_role)
 
 -- PRICING CONFIG
 CREATE POLICY "Todos los autenticados ven tarifas"
@@ -200,7 +208,9 @@ INSERT INTO pricing_config (vehicle_type, first_hour_rate, extra_hour_rate, grac
 -- ============================================================
 -- Vista para reportes (accesible por admins via RLS en la tabla base)
 -- ============================================================
-CREATE OR REPLACE VIEW parking_reports AS
+CREATE OR REPLACE VIEW parking_reports
+WITH (security_invoker = true)
+AS
 SELECT
   id,
   plate,

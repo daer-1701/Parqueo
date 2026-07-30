@@ -14,6 +14,9 @@ import { useCallback, useEffect, useState } from 'react';
 const PRINT_SERVER_URL =
   process.env.NEXT_PUBLIC_PRINT_SERVER_URL?.trim() || 'http://127.0.0.1:3847';
 
+const PRINT_AGENT_TOKEN =
+  process.env.NEXT_PUBLIC_PRINT_AGENT_TOKEN?.trim() || 'parqueo-local-print-v1';
+
 type AgentStatus = 'checking' | 'online' | 'offline';
 
 async function sleep(ms: number) {
@@ -105,7 +108,10 @@ export function PrintAgentPanel() {
     try {
       const res = await fetch(`${PRINT_SERVER_URL}/print`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Print-Token': PRINT_AGENT_TOKEN,
+        },
         body: JSON.stringify({
           plate: 'PRUEBA01',
           entryAt: new Date().toISOString(),

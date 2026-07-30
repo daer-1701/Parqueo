@@ -26,7 +26,35 @@ import { sendGdiToPrinter } from './win-gdi-print.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PRINT_SERVER_PORT ?? 3847);
-const APP_ORIGIN = process.env.PRINT_APP_ORIGIN ?? 'http://localhost:3000';
+const APP_ORIGIN = (process.env.PRINT_APP_ORIGIN ?? process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000')
+  .trim()
+  .replace(/\/$/, '');
+const PRINT_AGENT_TOKEN =
+  process.env.PRINT_AGENT_TOKEN?.trim() ||
+  process.env.NEXT_PUBLIC_PRINT_AGENT_TOKEN?.trim() ||
+  'parqueo-local-print-v1';
+
+const ALLOWED_ORIGINS = new Set([
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+  'https://parqueo-two.vercel.app',
+  APP_ORIGIN,
+]);
+
+function isAllowedOrigin(origin) {
+  if (!origin) return true;
+  return ALLOWED_ORIGINS.has(origin);
+}
+
+function readPrintToken(req) {
+  const header = req.headers['x-print-token'];
+  if (typeof header === 'string' && header) return header;
+  const auth = req.headers.authorization;
+  if (typeof auth === 'string' && auth.startsWith('Bearer ')) {
+    return auth.slice(7).trim();
+  }
+  return '';
+}
 
 function loadEnv() {
   const envPath = resolve(__dirname, '../.env.local');
@@ -148,21 +176,15 @@ function readJsonBody(req) {
 
 function sendJson(res, status, payload, req) {
   const origin = req.headers.origin;
-  let allowOrigin = '*';
-  if (origin) {
-    const local =
-      origin.startsWith('http://localhost') || origin.startsWith('http://127.0.0.1');
-    const vercel = origin.includes('vercel.app');
-    if (local || vercel) allowOrigin = origin;
-  }
+  const allowOrigin =
+    origin && isAllowedOrigin(origin) ? origin : APP_ORIGIN;
 
-  // Chrome Private Network Access: HTTPS (Vercel) → http://127.0.0.1
   const headers = {
     'Content-Type': 'application/json',
     'Access-Control-Allow-Origin': allowOrigin,
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers':
-      'Content-Type, Access-Control-Request-Private-Network',
+      'Content-Type, Authorization, X-Print-Token, Access-Control-Request-Private-Network',
     'Access-Control-Allow-Private-Network': 'true',
   };
 
@@ -175,6 +197,12 @@ function sendJson(res, status, payload, req) {
 }
 
 const server = http.createServer(async (req, res) => {
+  const origin = req.headers.origin;
+  if (origin && !isAllowedOrigin(origin)) {
+    sendJson(res, 403, { ok: false, error: 'Origen no permitido' }, req);
+    return;
+  }
+
   if (req.method === 'OPTIONS') {
     sendJson(res, 204, {}, req);
     return;
@@ -193,6 +221,10 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === 'POST' && req.url === '/print') {
+    if (readPrintToken(req) !== PRINT_AGENT_TOKEN) {
+      sendJson(res, 401, { ok: false, error: 'Token de impresión inválido' }, req);
+      return;
+    }
     try {
       const body = await readJsonBody(req);
       if (!body.plate?.trim() || !body.entryAt) {

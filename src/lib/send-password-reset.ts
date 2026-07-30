@@ -51,13 +51,10 @@ function buildResetEmailText(resetUrl: string): string {
  * Genera enlace de recuperación en Supabase y lo envía por SMTP
  * (Gmail / contraseña de aplicación).
  */
-export async function sendPasswordResetEmail(
-  email: string,
-  request?: Request
-): Promise<void> {
+export async function sendPasswordResetEmail(email: string): Promise<void> {
   const admin = createAdminClient();
-  const redirectTo = getPasswordResetRedirectUrl(request);
-  const siteUrl = getSiteUrl(request);
+  const redirectTo = getPasswordResetRedirectUrl();
+  const siteUrl = getSiteUrl();
 
   const { data, error } = await admin.auth.admin.generateLink({
     type: 'recovery',

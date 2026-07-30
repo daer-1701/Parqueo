@@ -1,3 +1,4 @@
+import { validatePassword } from '@/lib/password-policy';
 import { createAdminClient, verifyAdminSession } from '@/lib/supabase/admin';
 import type { UserRole } from '@/types/database';
 import { NextResponse } from 'next/server';
@@ -56,13 +57,10 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     if (email?.trim()) authUpdates.email = email.trim().toLowerCase();
     if (full_name?.trim()) authUpdates.user_metadata = { full_name: full_name.trim() };
-    if (role) authUpdates.user_metadata = { ...authUpdates.user_metadata, role };
     if (password) {
-      if (password.length < 6) {
-        return NextResponse.json(
-          { error: 'La contraseña debe tener al menos 6 caracteres' },
-          { status: 400 }
-        );
+      const passwordError = validatePassword(password);
+      if (passwordError) {
+        return NextResponse.json({ error: passwordError }, { status: 400 });
       }
       authUpdates.password = password;
     }

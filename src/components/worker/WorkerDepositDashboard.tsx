@@ -366,7 +366,7 @@ export function WorkerDepositDashboard() {
 
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                        Nota (opcional)
+                        Nota {parseMoneyInput(depositedInput) !== (collections?.expectedAmount ?? 0) ? '(obligatoria si difiere)' : '(opcional)'}
                       </label>
                       <textarea
                         value={notes}

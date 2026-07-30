@@ -226,12 +226,11 @@ function EntryForm({ pricing, userId, onSuccess }: EntryFormProps) {
 interface CheckoutModalProps {
   entry: ParkingEntry;
   pricing: PricingConfig[];
-  userId: string;
   onClose: () => void;
   onSuccess: () => void;
 }
 
-function CheckoutModal({ entry, pricing, userId, onClose, onSuccess }: CheckoutModalProps) {
+function CheckoutModal({ entry, pricing, onClose, onSuccess }: CheckoutModalProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [received, setReceived] = useState('');
@@ -284,18 +283,15 @@ function CheckoutModal({ entry, pricing, userId, onClose, onSuccess }: CheckoutM
     setLoading(true);
     setError('');
 
-    const { error: updateError } = await supabase
-      .from('parking_entries')
-      .update({
-        status: 'completed',
-        exit_at: now.toISOString(),
-        amount,
-        worker_exit_id: userId,
-      })
-      .eq('id', entry.id);
+    const res = await fetch('/api/parking/checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ entryId: entry.id }),
+    });
 
-    if (updateError) {
-      setError('Error al procesar la salida');
+    if (!res.ok) {
+      const payload = (await res.json().catch(() => null)) as { error?: string } | null;
+      setError(payload?.error ?? 'Error al procesar la salida');
       setLoading(false);
       return;
     }
@@ -664,7 +660,6 @@ export function WorkerDashboard({
         <CheckoutModal
           entry={checkoutEntry}
           pricing={pricing}
-          userId={userId}
           onClose={() => setCheckoutEntry(null)}
           onSuccess={() => {
             setCheckoutEntry(null);

@@ -1,4 +1,6 @@
 import { getDashboardPath } from '@/lib/auth';
+import { setProfileLocked } from '@/lib/account-lock';
+import { checkRateLimit, clientIpFromRequest } from '@/lib/rate-limit';
 import { MAX_LOGIN_ATTEMPTS } from '@/lib/support';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
@@ -10,6 +12,21 @@ interface LoginBody {
 }
 
 export async function POST(request: Request) {
+  const ip = clientIpFromRequest(request);
+  const ipLimit = checkRateLimit(`login:ip:${ip}`, 20, 15 * 60 * 1000);
+  if (!ipLimit.ok) {
+    return NextResponse.json(
+      {
+        error: 'rate_limit',
+        message: `Demasiados intentos. Espera ${ipLimit.retryAfterSec}s.`,
+      },
+      {
+        status: 429,
+        headers: { 'Retry-After': String(ipLimit.retryAfterSec) },
+      }
+    );
+  }
+
   let body: LoginBody;
   try {
     body = await request.json();
@@ -24,6 +41,20 @@ export async function POST(request: Request) {
     return NextResponse.json(
       { error: 'credentials', message: 'Correo y contraseña son obligatorios' },
       { status: 400 }
+    );
+  }
+
+  const emailLimit = checkRateLimit(`login:email:${email}`, 10, 15 * 60 * 1000);
+  if (!emailLimit.ok) {
+    return NextResponse.json(
+      {
+        error: 'rate_limit',
+        message: `Demasiados intentos. Espera ${emailLimit.retryAfterSec}s.`,
+      },
+      {
+        status: 429,
+        headers: { 'Retry-After': String(emailLimit.retryAfterSec) },
+      }
     );
   }
 
@@ -43,7 +74,7 @@ export async function POST(request: Request) {
     profile = data;
   }
 
-  if (profile?.is_locked) {
+  if (profile?.is_locked || Boolean(authUser?.banned_until)) {
     return NextResponse.json(
       {
         error: 'blocked',
@@ -65,16 +96,8 @@ export async function POST(request: Request) {
       const attempts = (profile?.failed_login_attempts ?? 0) + 1;
       const locked = attempts >= MAX_LOGIN_ATTEMPTS;
 
-      await admin
-        .from('profiles')
-        .update({
-          failed_login_attempts: attempts,
-          is_locked: locked,
-          locked_at: locked ? new Date().toISOString() : null,
-        })
-        .eq('id', authUser.id);
-
       if (locked) {
+        await setProfileLocked(admin, authUser.id, true, attempts);
         return NextResponse.json(
           {
             error: 'blocked',
@@ -85,12 +108,19 @@ export async function POST(request: Request) {
         );
       }
 
-      const attemptsLeft = MAX_LOGIN_ATTEMPTS - attempts;
+      await admin
+        .from('profiles')
+        .update({
+          failed_login_attempts: attempts,
+          is_locked: false,
+          locked_at: null,
+        })
+        .eq('id', authUser.id);
+
       return NextResponse.json(
         {
           error: 'credentials',
-          attemptsLeft,
-          message: `Credenciales incorrectas. Te quedan ${attemptsLeft} intento(s).`,
+          message: 'Credenciales incorrectas.',
         },
         { status: 401 }
       );
@@ -102,14 +132,7 @@ export async function POST(request: Request) {
     );
   }
 
-  await admin
-    .from('profiles')
-    .update({
-      failed_login_attempts: 0,
-      is_locked: false,
-      locked_at: null,
-    })
-    .eq('id', data.user.id);
+  await setProfileLocked(admin, data.user.id, false, 0);
 
   const { data: userProfile } = await supabase
     .from('profiles')

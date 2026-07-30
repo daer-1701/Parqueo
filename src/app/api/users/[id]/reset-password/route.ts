@@ -1,5 +1,6 @@
 import { isSmtpConfigured } from '@/lib/mail';
 import { sendPasswordResetEmail } from '@/lib/send-password-reset';
+import { setProfileLocked } from '@/lib/account-lock';
 import { createAdminClient, verifyAdminSession } from '@/lib/supabase/admin';
 import { NextResponse } from 'next/server';
 
@@ -7,7 +8,7 @@ interface RouteContext {
   params: Promise<{ id: string }>;
 }
 
-export async function POST(request: Request, context: RouteContext) {
+export async function POST(_request: Request, context: RouteContext) {
   const auth = await verifyAdminSession();
   if ('error' in auth) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
@@ -33,16 +34,8 @@ export async function POST(request: Request, context: RouteContext) {
       return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 });
     }
 
-    await sendPasswordResetEmail(authUser.user.email, request);
-
-    await admin
-      .from('profiles')
-      .update({
-        is_locked: false,
-        failed_login_attempts: 0,
-        locked_at: null,
-      })
-      .eq('id', id);
+    await sendPasswordResetEmail(authUser.user.email);
+    await setProfileLocked(admin, id, false, 0);
 
     return NextResponse.json({
       success: true,

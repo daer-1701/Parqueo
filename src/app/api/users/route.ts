@@ -1,3 +1,4 @@
+import { validatePassword } from '@/lib/password-policy';
 import { createAdminClient, verifyAdminSession } from '@/lib/supabase/admin';
 import type { UserRole } from '@/types/database';
 import { NextResponse } from 'next/server';
@@ -30,7 +31,7 @@ export async function GET() {
         id: u.id,
         email: u.email ?? '',
         full_name: profile?.full_name ?? u.user_metadata?.full_name ?? u.email ?? '',
-        role: (profile?.role ?? u.user_metadata?.role ?? 'worker') as UserRole,
+        role: (profile?.role ?? 'worker') as UserRole,
         created_at: profile?.created_at ?? u.created_at,
         last_sign_in: u.last_sign_in_at,
         is_locked: profile?.is_locked ?? false,
@@ -75,11 +76,9 @@ export async function POST(request: Request) {
     );
   }
 
-  if (password.length < 6) {
-    return NextResponse.json(
-      { error: 'La contraseña debe tener al menos 6 caracteres' },
-      { status: 400 }
-    );
+  const passwordError = validatePassword(password);
+  if (passwordError) {
+    return NextResponse.json({ error: passwordError }, { status: 400 });
   }
 
   if (role !== 'admin' && role !== 'worker') {
@@ -89,26 +88,24 @@ export async function POST(request: Request) {
   try {
     const admin = createAdminClient();
 
+    // role NO va en metadata: el trigger siempre crea worker; luego upsert fija el rol
     const { data, error } = await admin.auth.admin.createUser({
       email: email.trim().toLowerCase(),
       password,
       email_confirm: true,
-      user_metadata: { full_name: full_name.trim(), role },
+      user_metadata: { full_name: full_name.trim() },
     });
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
 
-    // Asegurar que el perfil tenga el rol correcto (por si el trigger falló)
     if (data.user) {
-      await admin
-        .from('profiles')
-        .upsert({
-          id: data.user.id,
-          full_name: full_name.trim(),
-          role,
-        });
+      await admin.from('profiles').upsert({
+        id: data.user.id,
+        full_name: full_name.trim(),
+        role,
+      });
     }
 
     return NextResponse.json({

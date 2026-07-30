@@ -6,6 +6,9 @@ import { VEHICLE_LABELS } from '@/types/database';
 const PRINT_SERVER_URL =
   process.env.NEXT_PUBLIC_PRINT_SERVER_URL?.trim() || 'http://127.0.0.1:3847';
 
+const PRINT_AGENT_TOKEN =
+  process.env.NEXT_PUBLIC_PRINT_AGENT_TOKEN?.trim() || 'parqueo-local-print-v1';
+
 /** Solo si true: abre diálogo de Chrome cuando falla el servicio local */
 const CHROME_FALLBACK = process.env.NEXT_PUBLIC_PRINT_CHROME_FALLBACK === 'true';
 
@@ -45,7 +48,10 @@ async function tryDirectPrint(data: EntryLabelData): Promise<boolean> {
 
     const res = await fetch(`${PRINT_SERVER_URL}/print`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Print-Token': PRINT_AGENT_TOKEN,
+      },
       body: JSON.stringify({
         plate: data.plate,
         entryAt: data.entryAt,

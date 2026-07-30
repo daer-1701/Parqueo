@@ -1,15 +1,13 @@
 -- ============================================================
--- FIX: Error "Database error creating new user"
+-- FIX: Error "Database error creating new user" + rol seguro
 -- Ejecutar en Supabase → SQL Editor
+-- (Preferir migrate-security-hardening.sql en instalaciones actuales)
 -- ============================================================
 
--- El trigger handle_new_user no podía insertar en profiles por RLS
+-- Sin política INSERT: el trigger SECURITY DEFINER y service_role insertan el perfil
 DROP POLICY IF EXISTS "Insertar perfil al registrarse" ON profiles;
-CREATE POLICY "Insertar perfil al registrarse"
-  ON profiles FOR INSERT
-  WITH CHECK (true);
 
--- Trigger mejorado (search_path seguro)
+-- Siempre worker; el admin asigna rol vía API (service role)
 CREATE OR REPLACE FUNCTION handle_new_user()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -21,7 +19,7 @@ BEGIN
   VALUES (
     NEW.id,
     COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.email),
-    COALESCE((NEW.raw_user_meta_data->>'role')::user_role, 'worker')
+    'worker'
   );
   RETURN NEW;
 END;
