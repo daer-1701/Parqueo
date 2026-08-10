@@ -54,11 +54,14 @@ BEGIN
 END;
 $$;
 
--- get_my_role sin SECURITY DEFINER: lee solo el propio perfil (RLS OK) y evita alertas
+-- get_my_role DEBE ser SECURITY DEFINER: si no, las políticas de profiles
+-- que llaman get_my_role() provocan recursión infinita y HTTP 500.
+-- Mitigación del advisor: search_path fijo + REVOKE a PUBLIC/anon.
 CREATE OR REPLACE FUNCTION public.get_my_role()
 RETURNS user_role
 LANGUAGE sql
 STABLE
+SECURITY DEFINER
 SET search_path = public
 AS $$
   SELECT role FROM public.profiles WHERE id = auth.uid();

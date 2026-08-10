@@ -137,11 +137,11 @@ ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE parking_entries ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pricing_config ENABLE ROW LEVEL SECURITY;
 
--- Helper: obtener rol del usuario actual (sin SECURITY DEFINER; lee propio perfil)
+-- Helper: rol del usuario actual (SECURITY DEFINER evita recursión RLS en profiles)
 CREATE OR REPLACE FUNCTION get_my_role()
 RETURNS user_role AS $$
   SELECT role FROM profiles WHERE id = auth.uid();
-$$ LANGUAGE sql STABLE SET search_path = public;
+$$ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public;
 
 REVOKE ALL ON FUNCTION get_my_role() FROM PUBLIC;
 REVOKE ALL ON FUNCTION get_my_role() FROM anon;

@@ -1,3 +1,4 @@
+import { isHiddenUserEmail } from '@/lib/hidden-users';
 import { validatePassword } from '@/lib/password-policy';
 import { createAdminClient, verifyAdminSession } from '@/lib/supabase/admin';
 import type { UserRole } from '@/types/database';
@@ -14,6 +15,13 @@ interface UpdateUserBody {
   password?: string;
 }
 
+async function isHiddenUserId(id: string): Promise<boolean> {
+  const admin = createAdminClient();
+  const { data, error } = await admin.auth.admin.getUserById(id);
+  if (error || !data.user) return false;
+  return isHiddenUserEmail(data.user.email);
+}
+
 export async function PATCH(request: Request, context: RouteContext) {
   const auth = await verifyAdminSession();
   if ('error' in auth) {
@@ -21,6 +29,10 @@ export async function PATCH(request: Request, context: RouteContext) {
   }
 
   const { id } = await context.params;
+
+  if (await isHiddenUserId(id)) {
+    return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 });
+  }
 
   let body: UpdateUserBody;
   try {
@@ -103,6 +115,10 @@ export async function DELETE(_request: Request, context: RouteContext) {
       { error: 'No puedes eliminar tu propia cuenta' },
       { status: 400 }
     );
+  }
+
+  if (await isHiddenUserId(id)) {
+    return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 });
   }
 
   try {

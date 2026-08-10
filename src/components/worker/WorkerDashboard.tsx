@@ -92,7 +92,11 @@ function EntryForm({ pricing, userId, onSuccess }: EntryFormProps) {
       .single();
 
     if (insertError || !entry) {
-      setError('Error al registrar la entrada');
+      setError(
+        insertError?.message
+          ? `Error al registrar la entrada: ${insertError.message}`
+          : 'Error al registrar la entrada'
+      );
       setLoading(false);
       return;
     }

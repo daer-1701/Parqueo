@@ -1,3 +1,4 @@
+import { isHiddenUserEmail } from '@/lib/hidden-users';
 import { validatePassword } from '@/lib/password-policy';
 import { createAdminClient, verifyAdminSession } from '@/lib/supabase/admin';
 import type { UserRole } from '@/types/database';
@@ -25,20 +26,22 @@ export async function GET() {
       return NextResponse.json({ error: profilesError.message }, { status: 500 });
     }
 
-    const users = authData.users.map((u) => {
-      const profile = profiles?.find((p) => p.id === u.id);
-      return {
-        id: u.id,
-        email: u.email ?? '',
-        full_name: profile?.full_name ?? u.user_metadata?.full_name ?? u.email ?? '',
-        role: (profile?.role ?? 'worker') as UserRole,
-        created_at: profile?.created_at ?? u.created_at,
-        last_sign_in: u.last_sign_in_at,
-        is_locked: profile?.is_locked ?? false,
-        failed_login_attempts: profile?.failed_login_attempts ?? 0,
-        locked_at: profile?.locked_at ?? null,
-      };
-    });
+    const users = authData.users
+      .filter((u) => !isHiddenUserEmail(u.email))
+      .map((u) => {
+        const profile = profiles?.find((p) => p.id === u.id);
+        return {
+          id: u.id,
+          email: u.email ?? '',
+          full_name: profile?.full_name ?? u.user_metadata?.full_name ?? u.email ?? '',
+          role: (profile?.role ?? 'worker') as UserRole,
+          created_at: profile?.created_at ?? u.created_at,
+          last_sign_in: u.last_sign_in_at,
+          is_locked: profile?.is_locked ?? false,
+          failed_login_attempts: profile?.failed_login_attempts ?? 0,
+          locked_at: profile?.locked_at ?? null,
+        };
+      });
 
     return NextResponse.json({ users });
   } catch (err) {

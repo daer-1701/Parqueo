@@ -70,11 +70,12 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
--- 3) Helper de rol (INVOKER + search_path fijo; sin SECURITY DEFINER)
+-- 3) Helper de rol (SECURITY DEFINER + search_path fijo)
+-- Sin DEFINER: políticas de profiles que usan get_my_role() → recursión infinita
 CREATE OR REPLACE FUNCTION get_my_role()
 RETURNS user_role AS $$
   SELECT role FROM profiles WHERE id = auth.uid();
-$$ LANGUAGE sql STABLE SET search_path = public;
+$$ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public;
 
 REVOKE ALL ON FUNCTION get_my_role() FROM PUBLIC;
 REVOKE ALL ON FUNCTION get_my_role() FROM anon;
