@@ -17,9 +17,10 @@ import {
 import { addDays, endOfDay, parseISO, startOfDay } from 'date-fns';
 import { fromZonedTime, toZonedTime } from 'date-fns-tz';
 import { formatCurrency } from '@/lib/pricing';
-import type { ParkingEntry, ReportPeriodData, ReportSummary } from '@/types/database';
+import type { ParkingEntry, ReportSummary } from '@/types/database';
 import { VEHICLE_LABELS } from '@/types/database';
 import { CalendarRange, Loader2 } from 'lucide-react';
+import type { RevenueChartPoint } from './AdminRevenueChart';
 import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -44,11 +45,11 @@ function filterByRange(entries: ParkingEntry[], range: BoliviaDateRange) {
   );
 }
 
-function buildChartData(entries: ParkingEntry[], range: BoliviaDateRange): ReportPeriodData[] {
+function buildChartData(entries: ParkingEntry[], range: BoliviaDateRange): RevenueChartPoint[] {
   const isSingleDay = range.days === 1;
 
   if (isSingleDay) {
-    const buckets: ReportPeriodData[] = Array.from({ length: 24 }, (_, hour) => ({
+    const buckets: RevenueChartPoint[] = Array.from({ length: 24 }, (_, hour) => ({
       period: `${hour.toString().padStart(2, '0')}:00`,
       entries: 0,
       revenue: 0,
@@ -95,10 +96,12 @@ function buildChartData(entries: ParkingEntry[], range: BoliviaDateRange): Repor
     }
   }
 
-  return buckets.map(({ period, entries: count, revenue }) => ({
+  return buckets.map(({ period, entries: count, revenue, dayStart, dayEnd }) => ({
     period,
     entries: count,
     revenue,
+    dayStart: dayStart.toISOString(),
+    dayEnd: dayEnd.toISOString(),
   }));
 }
 
@@ -142,6 +145,7 @@ export function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [truncated, setTruncated] = useState(false);
+  const [selectedDayStart, setSelectedDayStart] = useState<string | null>(null);
 
   const rangeInvalid =
     filter === 'custom' && Boolean(customStart && customEnd && customStart > customEnd);
@@ -200,6 +204,10 @@ export function AdminDashboard() {
     void loadEntries();
   }, [loadEntries]);
 
+  useEffect(() => {
+    setSelectedDayStart(null);
+  }, [filter, customStart, customEnd]);
+
   const filtered = useMemo(
     () => (filter === 'custom' && rangeInvalid ? [] : filterByRange(entries, activeRange)),
     [entries, activeRange, filter, rangeInvalid]
@@ -210,13 +218,28 @@ export function AdminDashboard() {
     [filtered, activeRange, filter, rangeInvalid]
   );
 
+  const selectedDay = chartData.find((point) => point.dayStart === selectedDayStart) ?? null;
+
+  const detailEntries = useMemo(() => {
+    if (!selectedDay?.dayStart || !selectedDay.dayEnd) return filtered;
+    const start = new Date(selectedDay.dayStart);
+    const end = new Date(selectedDay.dayEnd);
+    return filtered.filter(
+      (entry) => entry.exit_at && isInBoliviaPeriod(entry.exit_at, start, end)
+    );
+  }, [filtered, selectedDay]);
+
   const vehicleBreakdown = useMemo(() => {
     const breakdown: Record<string, number> = {};
-    filtered.forEach((e) => {
+    detailEntries.forEach((e) => {
       breakdown[e.vehicle_type] = (breakdown[e.vehicle_type] ?? 0) + 1;
     });
     return breakdown;
-  }, [filtered]);
+  }, [detailEntries]);
+
+  const detailLabel = selectedDay
+    ? formatBoliviaDateInput(selectedDay.dayStart!)
+    : rangeLabel;
 
   const isSingleDay = activeRange.days === 1;
   const chartTicksDense = chartData.length > 14;
@@ -318,18 +341,43 @@ export function AdminDashboard() {
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6">
-        <h2 className="text-base sm:text-lg font-semibold text-slate-900 mb-4">
-          Ingresos — {rangeLabel}
-        </h2>
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+          <h2 className="text-base sm:text-lg font-semibold text-slate-900">
+            Ingresos — {rangeLabel}
+          </h2>
+          {selectedDay && (
+            <button
+              type="button"
+              onClick={() => setSelectedDayStart(null)}
+              className="text-xs font-medium text-blue-700 hover:text-blue-900"
+            >
+              Ver todo el periodo
+            </button>
+          )}
+        </div>
+        {!isSingleDay && (
+          <p className="text-xs text-slate-500 -mt-2 mb-3">
+            Haz clic en una barra para ver ese día.
+          </p>
+        )}
         <AdminRevenueChart
           data={chartData}
           isSingleDay={isSingleDay}
           chartTicksDense={chartTicksDense}
+          selectedDayStart={selectedDayStart}
+          onDayClick={(point) => {
+            if (!point.dayStart) return;
+            setSelectedDayStart((current) =>
+              current === point.dayStart ? null : point.dayStart!
+            );
+          }}
         />
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6">
-        <h3 className="font-semibold text-slate-900 mb-4">Por tipo de vehículo</h3>
+        <h3 className="font-semibold text-slate-900 mb-4">
+          Por tipo de vehículo — {detailLabel}
+        </h3>
         {Object.keys(vehicleBreakdown).length === 0 ? (
           <p className="text-slate-400 text-sm">Sin datos</p>
         ) : (
@@ -339,7 +387,9 @@ export function AdminDashboard() {
                 <span className="text-sm text-slate-600">
                   {VEHICLE_LABELS[type as keyof typeof VEHICLE_LABELS]}
                 </span>
-                <span className="font-medium">{count} vehículos</span>
+                <span className="font-medium">
+                  {count} {count === 1 ? 'vehículo' : 'vehículos'}
+                </span>
               </div>
             ))}
           </div>
@@ -348,15 +398,15 @@ export function AdminDashboard() {
 
       <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6">
         <h3 className="font-semibold text-slate-900 mb-4 text-sm sm:text-base">
-          Últimas transacciones — {rangeLabel}
+          Últimas transacciones — {detailLabel}
         </h3>
-        {filtered.length === 0 ? (
+        {detailEntries.length === 0 ? (
           <p className="text-slate-400 text-sm text-center py-8">No hay transacciones en este periodo</p>
         ) : (
           <>
             {/* Móvil: tarjetas */}
             <div className="md:hidden space-y-3">
-              {filtered.slice(0, 20).map((entry) => (
+              {detailEntries.slice(0, 20).map((entry) => (
                 <div
                   key={entry.id}
                   className="rounded-xl border border-slate-200 p-4 bg-slate-50/50"
@@ -395,7 +445,7 @@ export function AdminDashboard() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.slice(0, 20).map((entry) => (
+                {detailEntries.slice(0, 20).map((entry) => (
                   <tr key={entry.id} className="border-b border-slate-100">
                     <td className="py-2.5 font-mono font-bold">{entry.plate}</td>
                     <td className="py-2.5">{VEHICLE_LABELS[entry.vehicle_type]}</td>

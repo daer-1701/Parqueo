@@ -1,9 +1,12 @@
 /**
- * Crea los usuarios iniciales de admin y operador en Supabase.
+ * Crea un admin y un operador en Supabase.
  *
- * Uso:
- *   1. Configura .env.local con SUPABASE_SERVICE_ROLE_KEY
- *   2. npm run setup:users
+ * En .env.local (no las subas al repositorio):
+ *   SUPABASE_SERVICE_ROLE_KEY
+ *   SETUP_ADMIN_EMAIL, SETUP_ADMIN_PASSWORD
+ *   SETUP_WORKER_EMAIL, SETUP_WORKER_PASSWORD
+ *
+ * Luego: npm run setup:users
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -31,22 +34,31 @@ function loadEnv() {
   }
 }
 
+loadEnv();
+
+function requiredEnv(name) {
+  const value = process.env[name]?.trim();
+  if (!value) {
+    console.error(`❌ Falta ${name} en .env.local`);
+    process.exit(1);
+  }
+  return value;
+}
+
 const INITIAL_USERS = [
   {
-    email: 'admin@parqueo.com',
-    password: 'Admin1234!',
-    full_name: 'Administrador',
+    email: requiredEnv('SETUP_ADMIN_EMAIL'),
+    password: requiredEnv('SETUP_ADMIN_PASSWORD'),
+    full_name: process.env.SETUP_ADMIN_NAME?.trim() || 'Administrador',
     role: 'admin',
   },
   {
-    email: 'worker@parqueo.com',
-    password: 'Worker1234!',
-    full_name: 'Operador Parqueo',
+    email: requiredEnv('SETUP_WORKER_EMAIL'),
+    password: requiredEnv('SETUP_WORKER_PASSWORD'),
+    full_name: process.env.SETUP_WORKER_NAME?.trim() || 'Operador Parqueo',
     role: 'worker',
   },
 ];
-
-loadEnv();
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
 const serviceKey = (
@@ -118,16 +130,10 @@ console.log('🚗 Creando usuarios iniciales...\n');
 for (const user of INITIAL_USERS) {
   try {
     await createOrUpdateUser(user);
-    console.log(`✅ ${user.role.toUpperCase().padEnd(6)} → ${user.email} / ${user.password}`);
+    console.log(`✅ ${user.role.toUpperCase().padEnd(6)} → ${user.email}`);
   } catch (err) {
     console.error(`❌ Error con ${user.email}:`, err.message);
   }
 }
 
-console.log('\n📋 Credenciales de acceso:');
-console.log('┌─────────────────────────────────────────────┐');
-for (const u of INITIAL_USERS) {
-  console.log(`│ ${u.role === 'admin' ? 'Admin  ' : 'Worker '} │ ${u.email.padEnd(22)} │ ${u.password.padEnd(12)} │`);
-}
-console.log('└─────────────────────────────────────────────┘');
-console.log('\n⚠️  Cambia las contraseñas en producción.');
+console.log('\nListo. Esas contraseñas solo están en tu .env.local.');
