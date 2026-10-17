@@ -19,9 +19,9 @@ import { fromZonedTime, toZonedTime } from 'date-fns-tz';
 import { formatCurrency } from '@/lib/pricing';
 import type { ParkingEntry, ReportPeriodData, ReportSummary } from '@/types/database';
 import { VEHICLE_LABELS } from '@/types/database';
-import { CalendarRange } from 'lucide-react';
+import { CalendarRange, Loader2 } from 'lucide-react';
 import dynamic from 'next/dynamic';
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 const AdminRevenueChart = dynamic(
   () => import('./AdminRevenueChart').then((m) => m.AdminRevenueChart),
@@ -33,8 +33,9 @@ const AdminRevenueChart = dynamic(
   }
 );
 
-interface AdminDashboardProps {
+interface EntriesResponse {
   entries: ParkingEntry[];
+  truncated?: boolean;
 }
 
 function filterByRange(entries: ParkingEntry[], range: BoliviaDateRange) {
@@ -132,11 +133,15 @@ function getRangeLabel(
   return PERIOD_LABELS[filter as ReportPeriod];
 }
 
-export function AdminDashboard({ entries }: AdminDashboardProps) {
+export function AdminDashboard() {
   const today = todayInBolivia();
   const [filter, setFilter] = useState<ReportFilter>('day');
   const [customStart, setCustomStart] = useState(today);
   const [customEnd, setCustomEnd] = useState(today);
+  const [entries, setEntries] = useState<ParkingEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [truncated, setTruncated] = useState(false);
 
   const rangeInvalid =
     filter === 'custom' && Boolean(customStart && customEnd && customStart > customEnd);
@@ -152,6 +157,48 @@ export function AdminDashboard({ entries }: AdminDashboardProps) {
   }, [filter, customStart, customEnd, rangeInvalid]);
 
   const rangeLabel = getRangeLabel(filter, customStart, customEnd);
+
+  const loadEntries = useCallback(async () => {
+    if (rangeInvalid) {
+      setEntries([]);
+      setTruncated(false);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+
+    const params = new URLSearchParams();
+    params.set('period', filter);
+    if (filter === 'custom') {
+      params.set('start', customStart);
+      params.set('end', customEnd);
+    }
+
+    try {
+      const res = await fetch(`/api/reports/entries?${params.toString()}`);
+      const body = (await res.json()) as EntriesResponse & { error?: string };
+      if (!res.ok) {
+        setEntries([]);
+        setTruncated(false);
+        setError(body.error || 'No se pudieron cargar las transacciones');
+        return;
+      }
+      setEntries(body.entries ?? []);
+      setTruncated(Boolean(body.truncated));
+    } catch {
+      setEntries([]);
+      setTruncated(false);
+      setError('No se pudieron cargar las transacciones');
+    } finally {
+      setLoading(false);
+    }
+  }, [filter, customStart, customEnd, rangeInvalid]);
+
+  useEffect(() => {
+    void loadEntries();
+  }, [loadEntries]);
 
   const filtered = useMemo(
     () => (filter === 'custom' && rangeInvalid ? [] : filterByRange(entries, activeRange)),
@@ -238,9 +285,27 @@ export function AdminDashboard({ entries }: AdminDashboardProps) {
               La fecha de inicio no puede ser posterior a la fecha de fin.
             </p>
           )}
+          {truncated && (
+            <p className="mt-2 text-xs text-amber-700">
+              Este rango tiene demasiadas salidas. Se muestran las 20.000 más recientes.
+            </p>
+          )}
         </div>
       </div>
 
+      {error && (
+        <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          {error}
+        </p>
+      )}
+
+      {loading ? (
+        <div className="flex items-center justify-center gap-2 py-10 text-sm text-slate-500">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          Cargando transacciones…
+        </div>
+      ) : (
+      <div className="space-y-4 sm:space-y-6">
       <div className="grid grid-cols-2 gap-3 sm:gap-4">
         <div className="rounded-xl border bg-blue-50 text-blue-700 border-blue-100 p-4 sm:p-5">
           <p className="text-xs sm:text-sm font-medium opacity-80">Vehículos atendidos</p>
@@ -349,6 +414,8 @@ export function AdminDashboard({ entries }: AdminDashboardProps) {
           </>
         )}
       </div>
+      </div>
+      )}
     </div>
   );
 }
